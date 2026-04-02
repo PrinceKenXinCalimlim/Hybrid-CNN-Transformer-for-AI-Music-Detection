@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
-import { Upload, ArrowLeft } from "lucide-react";
+import { Upload } from "lucide-react";
 
 export default function Design2Upload() {
   const navigate = useNavigate();
@@ -19,7 +19,7 @@ export default function Design2Upload() {
 
   const handleAnalyze = () => {
     if (selectedFile)
-      navigate("/design2/results", { state: { fileName: selectedFile.name } });
+      navigate("/results", { state: { fileName: selectedFile.name } });
   };
 
   return (
@@ -27,14 +27,6 @@ export default function Design2Upload() {
 
       {/* LEFT PANEL — fixed */}
       <div className="fixed top-0 left-0 h-full w-1/2 bg-gradient-to-br from-emerald-600 to-teal-600 flex flex-col justify-center p-6 sm:p-8 lg:p-12 overflow-hidden z-10">
-
-        {/* Back button */}
-        <button
-          onClick={() => navigate("/")}
-          className="absolute top-6 left-6 inline-flex items-center gap-2 text-white/80 hover:text-white text-sm transition-all px-3 py-2 rounded-lg hover:bg-white/20 active:bg-white/30"
-        >
-          <ArrowLeft className="w-4 h-4" /> Back
-        </button>
 
         {/* Animated waveform bars */}
         <div className="absolute inset-0 flex items-end justify-around px-4 overflow-hidden pointer-events-none" aria-hidden="true">
@@ -76,47 +68,50 @@ export default function Design2Upload() {
           <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 mb-2">Upload Audio</h2>
           <p className="text-sm sm:text-base text-gray-600 mb-6 lg:mb-8">Select an audio file to begin analysis</p>
 
-          {/* Drop zone */}
-          <div
-            onDrop={handleDrop}
-            onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-            onDragLeave={() => setIsDragging(false)}
-            className={`border-2 border-dashed rounded-2xl p-6 sm:p-8 lg:p-12 text-center transition-all mb-6 lg:mb-8 cursor-pointer ${
-              isDragging || selectedFile
-                ? "border-emerald-500 bg-emerald-50"
-                : "border-gray-300 hover:border-gray-400"
-            }`}
-          >
-            <Upload className={`w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 mx-auto mb-3 lg:mb-4 ${selectedFile ? "text-emerald-600" : "text-gray-400"}`} />
-            {selectedFile ? (
-              <>
-                <p className="font-semibold text-gray-900 mb-1 text-sm sm:text-base truncate">{selectedFile.name}</p>
-                <p className="text-xs sm:text-sm text-gray-500">{(selectedFile.size / 1024 / 1024).toFixed(2)} MB</p>
-              </>
-            ) : (
-              <>
-                <p className="text-gray-900 font-medium mb-1 text-sm sm:text-base">Drop your audio file here</p>
-                <p className="text-xs sm:text-sm text-gray-500">MP3, WAV, FLAC, M4A</p>
-              </>
-            )}
-          </div>
-
-          <input type="file" accept="audio/*" onChange={handleFileSelect} className="hidden" id="file-upload" />
-
-          <div className="space-y-3">
-            <label htmlFor="file-upload" className="block">
-              <span className="flex items-center justify-center w-full px-4 py-2.5 sm:py-3 border-2 border-gray-300 rounded-xl text-gray-700 font-semibold text-sm cursor-pointer hover:border-gray-400 hover:bg-gray-50 transition-all">
-                Browse Files
-              </span>
-            </label>
-            <button
-              onClick={handleAnalyze}
-              disabled={!selectedFile}
-              className="w-full px-4 py-2.5 sm:py-3 rounded-xl text-white font-semibold text-sm bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+          {/* Drop zone — now also acts as file browser */}
+          <input
+            type="file"
+            accept="audio/*"
+            onChange={handleFileSelect}
+            className="hidden"
+            id="file-upload"
+          />
+          <label htmlFor="file-upload" className="block mb-6 lg:mb-8">
+            <div
+              onDrop={handleDrop}
+              onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+              onDragLeave={() => setIsDragging(false)}
+              className={`border-2 border-dashed rounded-2xl p-6 sm:p-8 lg:p-12 text-center transition-all cursor-pointer ${
+                isDragging || selectedFile
+                  ? "border-emerald-500 bg-emerald-50"
+                  : "border-gray-300 hover:border-emerald-400 hover:bg-gray-50"
+              }`}
             >
-              Start Analysis
-            </button>
-          </div>
+              <Upload className={`w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 mx-auto mb-3 lg:mb-4 ${selectedFile ? "text-emerald-600" : "text-gray-400"}`} />
+              {selectedFile ? (
+                <>
+                  <p className="font-semibold text-gray-900 mb-1 text-sm sm:text-base truncate">{selectedFile.name}</p>
+                  <p className="text-xs sm:text-sm text-gray-500">{(selectedFile.size / 1024 / 1024).toFixed(2)} MB</p>
+                  <p className="text-xs text-emerald-600 mt-2">Click to change file</p>
+                </>
+              ) : (
+                <>
+                  <p className="text-gray-900 font-medium mb-1 text-sm sm:text-base">Drag or browse your audio file here</p>
+                  <p className="text-xs sm:text-sm text-gray-500">MP3, WAV, FLAC, M4A</p>
+                </>
+              )}
+            </div>
+          </label>
+
+          {/* Start Analysis button only */}
+          <button
+            onClick={handleAnalyze}
+            disabled={!selectedFile}
+            className="w-full px-4 py-2.5 sm:py-3 rounded-xl text-white font-semibold text-sm bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+          >
+            Start Analysis
+          </button>
+
         </div>
       </div>
     </div>

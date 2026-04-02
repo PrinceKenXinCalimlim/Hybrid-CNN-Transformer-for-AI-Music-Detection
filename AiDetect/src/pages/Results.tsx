@@ -22,7 +22,7 @@ export default function Design2Results() {
 
         {/* Back button */}
         <button
-          onClick={() => navigate("/design2")}
+          onClick={() => navigate("/upload")}
           className="absolute top-6 left-6 inline-flex items-center gap-2 text-white/80 hover:text-white text-sm transition-all px-3 py-2 rounded-lg hover:bg-white/20 active:bg-white/30"
         >
           <ArrowLeft className="w-4 h-4" /> Back
