@@ -9,7 +9,7 @@ import warnings
 warnings.filterwarnings("ignore")
 
 SAMPLE_RATE = 16000 
-DURATION = 3        # 3 seconds: High speed, high accuracy
+DURATION = 6        # 6 seconds: High speed, high accuracy
 N_MELS = 128        
 
 class MusicDetectionDataset(Dataset):
