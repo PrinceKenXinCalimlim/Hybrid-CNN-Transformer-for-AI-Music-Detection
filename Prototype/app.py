@@ -740,6 +740,7 @@ def debug_last_analysis():
         'files': [os.path.basename(f) for f in wav_files],
         'message': 'These are the actual WAV files being analyzed'
     })
+    
 
 
 @app.route('/classify', methods=['POST'])
