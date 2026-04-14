@@ -3,914 +3,739 @@ import torch.nn as nn
 import torchaudio
 import soundfile as sf
 import os
-import math
 import warnings
 import tempfile
 import numpy as np
+import json
+import uuid
+import datetime
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
-from transformers import ASTModel
-from scipy.signal import butter, sosfilt
+from transformers import ASTModel, pipeline
 import subprocess
 
 warnings.filterwarnings("ignore")
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  CONFIG
-# ══════════════════════════════════════════════════════════════════════════════
+# ── Config ────────────────────────────────────────────────────────────────────
 SAMPLE_RATE     = 16000
 DURATION        = 6
-N_MELS          = 128
 CHECKPOINT_PATH = "best_model.pth"
 device          = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 SUPPORTED_EXTS  = {'.mp3', '.wav', '.flac', '.ogg', '.m4a', '.aac'}
-
-# Permanent WAV conversion settings
 SAVE_CONVERTED_WAV = True
-CONVERTED_WAV_DIR = "converted_wavs"
+CONVERTED_WAV_DIR  = "converted_wavs"
+REPORTS_FILE       = "misclassification_reports.jsonl"   # ← new
 
-# Global bias
-LOGIT_BIAS        = -0.10
 LOGIT_TEMPERATURE = 1.0
+CLIP_THRESHOLD    = 0.95
+CLIP_RATIO_SOFT   = 0.01
+CLIP_RATIO_HARD   = 0.10
+CLIP_MIN_WEIGHT   = 0.40
+PROB_FLOOR        = 0.01
+PROB_CEILING      = 0.99
+NEURAL_WEIGHT     = 0.75
+ACOUSTIC_WEIGHT   = 0.25
+AI_THRESHOLD      = 60
+PROFESSIONAL_PRODUCTION_BONUS_MIN = 0.92
 
-LOSSY_EXTS = {'.mp3', '.aac', '.m4a', '.ogg', '.flac'}
+# ── Codec compression penalty config ─────────────────────────────────────────
+CODEC_HF_RATIO_THRESHOLD    = 0.02
+CODEC_NEURAL_PENALTY        = 0.12
+CODEC_SCORE_DISCOUNT        = 0.88
 
-# No format penalties
-FORMAT_LOGIT_BIAS = {
-    '.mp3': 0.0,
-    '.aac': 0.0,
-    '.m4a': 0.0,
-    '.ogg': 0.0,
-    '.flac':-0.20,
-    '.wav': -0.12,
+GENRE_MODEL_PRIMARY   = "dima806/music_genres_classification"
+GENRE_MODEL_SECONDARY = "mtg-upf/discogs-maest-10s-pw-129e"
+GENRE_SAMPLE_RATE     = 16000
+GENRE_WIN_PRIMARY     = 10
+GENRE_WIN_SECONDARY   = 10
+GENRE_N_WINDOWS       = 3
+GENRE_TOP_SUBGENRES   = 3
+
+GTZAN_PARENT = {
+    "blues":"Blues","classical":"Classical","country":"Country","disco":"Electronic",
+    "hiphop":"Hip-Hop","jazz":"Jazz","metal":"Metal","pop":"Pop","reggae":"Reggae","rock":"Rock",
+}
+DISCOGS_PARENT_ALIAS = {
+    "Funk / Soul":"R&B","Hip Hop":"Hip-Hop","Latin":"World","Stage & Screen":"Soundtrack",
+    "Non-Music":None,"Children's":None,"Brass & Military":None,
 }
 
-CLIP_THRESHOLD  = 0.95
-CLIP_RATIO_SOFT = 0.01
-CLIP_RATIO_HARD = 0.10
-CLIP_MIN_WEIGHT = 0.40
+def parse_discogs_label(label):
+    parent, sub = (label.split("---",1) if "---" in label else (label, None))
+    parent = parent.strip(); sub = sub.strip() if sub else None
+    alias  = DISCOGS_PARENT_ALIAS.get(parent)
+    if alias is None and parent in DISCOGS_PARENT_ALIAS: return None, None
+    return (alias or parent), sub
 
-PROB_FLOOR   = 0.01
-PROB_CEILING = 0.99
-
-# Weights
-NEURAL_WEIGHT_LOSSLESS   = 0.75
-ACOUSTIC_WEIGHT_LOSSLESS = 0.25
-NEURAL_WEIGHT_LOSSY      = 0.92
-ACOUSTIC_WEIGHT_LOSSY    = 0.08
-
-# AI thresholds
-AI_THRESHOLD_LOSSLESS = 70
-AI_THRESHOLD_LOSSY    = 68
-
-# Acoustic features
-SECTION_CONSISTENCY_SCALE = 1.2
-DYNAMIC_RANGE_SCALE       = 0.15
-TONAL_VARIATION_SCALE     = 0.80
-HARMONIC_MOVEMENT_SCALE   = 2.0
-
-# Spectral flatness
-SF_CENTER     = 0.18
-SF_SIGMA_LOW  = 0.25
-SF_SIGMA_HIGH = 0.30
-
-# Zero crossing rate
-ZCR_CENTER = 0.20
-ZCR_SIGMA  = 0.40
-
-USE_WAV_RECONSTRUCTION = False
-
-# ══════════════════════════════════════════════════════════════════════════════
-app = Flask(__name__, static_folder='.')
+# ── Flask ─────────────────────────────────────────────────────────────────────
+app = Flask(__name__, static_folder=".")
 CORS(app)
-app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024
+app.config["MAX_CONTENT_LENGTH"] = 500 * 1024 * 1024
 
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  MODEL
-# ══════════════════════════════════════════════════════════════════════════════
+# ── Model ─────────────────────────────────────────────────────────────────────
 class HybridASTDetector(nn.Module):
     def __init__(self, ast_backbone):
         super().__init__()
         self.ast = ast_backbone
         self.cnn_block1 = nn.Sequential(
-            nn.Conv2d(1, 32, kernel_size=3, padding=1), nn.BatchNorm2d(32), nn.ReLU(),
-            nn.Conv2d(32, 32, kernel_size=3, padding=1), nn.BatchNorm2d(32), nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2),
-        )
+            nn.Conv2d(1,32,3,padding=1),nn.BatchNorm2d(32),nn.ReLU(),
+            nn.Conv2d(32,32,3,padding=1),nn.BatchNorm2d(32),nn.ReLU(),nn.MaxPool2d(2))
         self.cnn_block2 = nn.Sequential(
-            nn.Conv2d(32, 16, kernel_size=3, padding=1), nn.BatchNorm2d(16), nn.ReLU(),
-            nn.Conv2d(16, 1,  kernel_size=3, padding=1), nn.BatchNorm2d(1),  nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2),
-        )
-        self.residual_downsample = nn.Sequential(
-            nn.Conv2d(1, 1, kernel_size=1),
-            nn.MaxPool2d(kernel_size=4),
-        )
+            nn.Conv2d(32,16,3,padding=1),nn.BatchNorm2d(16),nn.ReLU(),
+            nn.Conv2d(16,1,3,padding=1),nn.BatchNorm2d(1),nn.ReLU(),nn.MaxPool2d(2))
+        self.residual_downsample = nn.Sequential(nn.Conv2d(1,1,1),nn.MaxPool2d(4))
         self.classifier = nn.Sequential(
-            nn.Linear(768 * 2, 512), nn.ReLU(), nn.Dropout(0.4),
-            nn.Linear(512, 128),     nn.ReLU(), nn.Dropout(0.3),
-            nn.Linear(128, 1),
-        )
+            nn.Linear(768*2,512),nn.ReLU(),nn.Dropout(0.4),
+            nn.Linear(512,128),nn.ReLU(),nn.Dropout(0.3),nn.Linear(128,1))
 
     def forward(self, x):
-        residual = x.unsqueeze(1)
-        cnn_out  = self.cnn_block1(residual)
-        cnn_out  = self.cnn_block2(cnn_out)
-        res      = self.residual_downsample(residual)
-        if res.shape != cnn_out.shape:
-            res = torch.nn.functional.interpolate(
-                res, size=cnn_out.shape[2:], mode='bilinear', align_corners=False)
-        cnn_out = (cnn_out + res).squeeze(1)
-        if cnn_out.shape[-1] != 1024 or cnn_out.shape[-2] != 128:
-            cnn_out = torch.nn.functional.interpolate(
-                cnn_out.unsqueeze(1), size=(128, 1024),
-                mode='bilinear', align_corners=False).squeeze(1)
-        ast_out   = self.ast(cnn_out).last_hidden_state
-        cls_token = ast_out[:, 0, :]
-        mean_pool = ast_out[:, 1:, :].mean(dim=1)
-        return self.classifier(torch.cat([cls_token, mean_pool], dim=1))
+        r = x.unsqueeze(1)
+        c = self.cnn_block2(self.cnn_block1(r))
+        res = self.residual_downsample(r)
+        if res.shape != c.shape:
+            res = torch.nn.functional.interpolate(res, size=c.shape[2:], mode="bilinear", align_corners=False)
+        c = (c + res).squeeze(1)
+        if c.shape[-1] != 1024 or c.shape[-2] != 128:
+            c = torch.nn.functional.interpolate(c.unsqueeze(1),(128,1024),mode="bilinear",align_corners=False).squeeze(1)
+        h = self.ast(c).last_hidden_state
+        return self.classifier(torch.cat([h[:,0,:], h[:,1:,:].mean(1)], dim=1))
 
+# ── Helpers ───────────────────────────────────────────────────────────────────
+def detect_professional_production(feat):
+    conds = [feat["dynamic_range"]<0.04, feat["spectral_flatness"]>0.8, feat["temporal_flux"]<0.8]
+    reasons = [r for r,c in zip(["professional compression","full frequency spectrum","consistent energy"],conds) if c]
+    bonus = max(PROFESSIONAL_PRODUCTION_BONUS_MIN, 1.0-len(reasons)*0.02) if len(reasons)>=2 else 1.0
+    return bonus, reasons
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  QUALITY WEIGHTING (Must be defined before use)
-# ══════════════════════════════════════════════════════════════════════════════
 def clipping_weight(chunk_tensor):
-    arr        = chunk_tensor.squeeze().numpy()
-    clip_ratio = float(np.mean(np.abs(arr) >= CLIP_THRESHOLD))
-    if clip_ratio <= CLIP_RATIO_SOFT:
-        return 1.0, clip_ratio
-    if clip_ratio >= CLIP_RATIO_HARD:
-        return CLIP_MIN_WEIGHT, clip_ratio
-    t      = (clip_ratio - CLIP_RATIO_SOFT) / (CLIP_RATIO_HARD - CLIP_RATIO_SOFT)
-    weight = 1.0 - t * (1.0 - CLIP_MIN_WEIGHT)
-    return weight, clip_ratio
+    cr = float(np.mean(np.abs(chunk_tensor.squeeze().numpy()) >= CLIP_THRESHOLD))
+    if cr <= CLIP_RATIO_SOFT: return 1.0, cr
+    if cr >= CLIP_RATIO_HARD: return CLIP_MIN_WEIGHT, cr
+    t = (cr-CLIP_RATIO_SOFT)/(CLIP_RATIO_HARD-CLIP_RATIO_SOFT)
+    return 1.0 - t*(1.0-CLIP_MIN_WEIGHT), cr
+
+# ── Codec compression detection ───────────────────────────────────────────────
+def detect_codec_compression(waveform_tensor, sr=SAMPLE_RATE):
+    arr = waveform_tensor.squeeze().numpy().astype(np.float32)
+    n   = len(arr)
+    if n < sr // 2:
+        return False, 1.0, 0.0, {"reason": "too short to evaluate"}
+
+    fft_out  = np.fft.rfft(arr, n=min(n, 65536))
+    freqs    = np.fft.rfftfreq(min(n, 65536), d=1.0 / sr)
+    mag_sq   = np.abs(fft_out) ** 2
+
+    total_energy = np.sum(mag_sq) + 1e-12
+    hf_energy    = np.sum(mag_sq[freqs > 7000])
+    hf_ratio     = float(hf_energy / total_energy)
+
+    band_lo = mag_sq[(freqs >= 6000) & (freqs < 7500)]
+    band_hi = mag_sq[(freqs >= 7500) & (freqs <= 8000)]
+    shelf_ratio = (np.mean(band_hi) / (np.mean(band_lo) + 1e-12)) if band_lo.size and band_hi.size else 1.0
+
+    region = mag_sq[(freqs >= 4000) & (freqs <= 8000)] + 1e-10
+    region_flatness = float(np.exp(np.mean(np.log(region))) / np.mean(region))
+
+    evidence = 0.0
+    if hf_ratio < CODEC_HF_RATIO_THRESHOLD:       evidence += 0.5
+    if shelf_ratio < 0.15:                         evidence += 0.25
+    if region_flatness > 0.60:                     evidence += 0.15
+    if hf_ratio < 0.005:                           evidence += 0.10
+
+    is_compressed = evidence >= 0.5
+    confidence    = float(np.clip(evidence, 0.0, 1.0))
+
+    details = {
+        "hf_ratio":        round(hf_ratio, 5),
+        "shelf_ratio":     round(float(shelf_ratio), 4),
+        "region_flatness": round(region_flatness, 4),
+        "evidence_score":  round(evidence, 3),
+    }
+    return is_compressed, hf_ratio, confidence, details
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  PREPROCESSING
-# ══════════════════════════════════════════════════════════════════════════════
-mel_transform = torchaudio.transforms.MelSpectrogram(
-    sample_rate=SAMPLE_RATE, n_fft=1024, hop_length=160, n_mels=N_MELS
-)
+def apply_codec_penalty(neural_prob, acoustic_prob, ai_probability,
+                        is_compressed, codec_confidence):
+    if not is_compressed:
+        return ai_probability, NEURAL_WEIGHT, ACOUSTIC_WEIGHT, {}
 
+    scale         = codec_confidence
+    nw_penalty    = CODEC_NEURAL_PENALTY * scale
+    score_mult    = 1.0 - (1.0 - CODEC_SCORE_DISCOUNT) * scale
 
-def convert_to_16k_wav_ffmpeg(input_path, original_filename=None):
-    """Use ffmpeg to convert to 16kHz WAV - more reliable than torchaudio"""
-    base_name = os.path.splitext(os.path.basename(original_filename or input_path))[0]
-    base_name = "".join(c for c in base_name if c.isalnum() or c in (' ', '-', '_')).rstrip()
-    
-    os.makedirs(CONVERTED_WAV_DIR, exist_ok=True)
-    output_path = os.path.join(CONVERTED_WAV_DIR, f"{base_name}_16khz.wav")
-    
-    # Use ffmpeg for reliable conversion
-    cmd = [
-        'ffmpeg', '-i', input_path,
-        '-ar', '16000',           # sample rate
-        '-ac', '1',               # mono
-        '-c:a', 'pcm_s16le',      # 16-bit PCM
-        '-y',                     # overwrite output
-        output_path
-    ]
-    
+    adj_nw        = max(0.40, NEURAL_WEIGHT  - nw_penalty)
+    adj_aw        = min(0.60, ACOUSTIC_WEIGHT + nw_penalty)
+
+    blended       = (adj_nw * neural_prob + adj_aw * acoustic_prob) * 100.0
+    adj_score     = round(float(np.clip(blended * score_mult, PROB_FLOOR * 100, PROB_CEILING * 100)), 1)
+
+    penalty_info = {
+        "applied":          True,
+        "confidence":       round(codec_confidence, 3),
+        "neural_weight_adj": round(adj_nw, 3),
+        "acoustic_weight_adj": round(adj_aw, 3),
+        "score_multiplier": round(score_mult, 3),
+        "original_score":   ai_probability,
+        "adjusted_score":   adj_score,
+        "reason": (
+            "Lossy codec compression detected (likely YouTube rip / MP3 / AAC). "
+            "Codec artefacts can mimic AI-generation signatures (spectral flatness, "
+            "clean noise floor). Neural weight reduced and final score discounted."
+        ),
+    }
+    return adj_score, adj_nw, adj_aw, penalty_info
+
+# ── Genre ─────────────────────────────────────────────────────────────────────
+def _sample_windows(total, win, n):
+    margin = max(0, int(total*0.05)); usable = total - 2*margin - win
+    if usable <= 0: return [max(0, total//2 - win//2)]
+    step = usable / max(n-1, 1)
+    return [min(margin+round(i*step), total-win) for i in range(n)]
+
+def _clip_window(wav, start, win):
+    clip = wav[:, start:min(wav.shape[1], start+win)].squeeze(0).numpy().astype(np.float32)
+    return np.pad(clip, (0, max(0, win-clip.shape[0])))
+
+def _run_model(pipeline_fn, waveform, win_secs, label_fn):
+    if pipeline_fn is None: return []
+    win = GENRE_SAMPLE_RATE * win_secs; results = []
+    for start in _sample_windows(waveform.shape[1], win, GENRE_N_WINDOWS):
+        try:
+            raw = pipeline_fn({"raw":_clip_window(waveform,start,win),"sampling_rate":GENRE_SAMPLE_RATE},
+                              top_k=50 if win_secs==GENRE_WIN_SECONDARY else None)
+            results.append([e for e in (label_fn(i) for i in raw) if e])
+        except Exception as e:
+            print(f"  [genre] window {start}: {e}")
+    return results
+
+def _primary_label(item):
+    lbl = item["label"].lower().replace(" ","").replace("-","")
+    parent = GTZAN_PARENT.get(item["label"].lower(), GTZAN_PARENT.get(lbl, item["label"].title()))
+    return {"label":parent,"score":float(item["score"]),"parent":parent,"sub":None}
+
+def _secondary_label(item):
+    parent, sub = parse_discogs_label(item["label"])
+    if parent is None: return None
+    return {"label":(f"{parent} — {sub}" if sub else parent),"score":float(item["score"]),"parent":parent,"sub":sub}
+
+def _aggregate(windows):
+    if not windows: return {"parent_scores":{},"subgenre_scores":{},"raw":[]}
+    n = len(windows); pa = {}; sa = {}
+    for w in windows:
+        total = sum(i["score"] for i in w) or 1.0
+        for i in w:
+            s=i["score"]/total; p=i["parent"]; k=(p,i["sub"])
+            pa[p]=pa.get(p,0)+s; sa[k]=sa.get(k,0)+s
+    pt=sum(pa.values()) or 1.0; st=sum(sa.values()) or 1.0
+    raw=sorted([{"label":(f"{p} — {s}" if s else p),"score":round(v/st*100,1),"parent":p,"sub":s}
+                for (p,s),v in sa.items()],key=lambda x:x["score"],reverse=True)
+    return {"parent_scores":{k:round(v/n/pt*100,1) for k,v in pa.items()},
+            "subgenre_scores":sa,"raw":raw}
+
+def _ensemble(pri, sec):
+    pp=pri["parent_scores"]; sp=sec["parent_scores"]; sg=sec["subgenre_scores"]
+    comb={p:(0.4*pp.get(p,0)+0.6*sp.get(p,0)) if pp.get(p) and sp.get(p)
+            else 0.7*pp.get(p,0) or 0.7*sp.get(p,0) for p in set(pp)|set(sp)}
+    pt=sum(comb.values()) or 1.0
+    ppct={k:round(v/pt*100,1) for k,v in comb.items()}
+    spct={}
+    for (p,s),v in sg.items():
+        st=sum(v2 for (p2,_),v2 in sg.items() if p2==p) or 1.0
+        spct[(p,s)]=round(v/st*comb.get(p,0)/pt*100,1)
+    return {"parent_pct":ppct,"subgenre_pct":spct}
+
+def _stability(windows, top):
+    scores=[]
+    for w in windows:
+        total=sum(i["score"] for i in w) or 1.0
+        scores.append(sum(i["score"] for i in w if i.get("parent","").lower()==top.lower())/total)
+    if len(scores)<2: return 0.5
+    mean=np.mean(scores)
+    return 0.3 if mean<0.05 else float(np.clip(1.0-np.std(scores)/(mean+1e-6),0.0,1.0))
+
+def classify_genre(waveform):
+    pw=_run_model(genre_pipeline_primary, waveform,GENRE_WIN_PRIMARY, _primary_label)
+    sw=_run_model(genre_pipeline_secondary,waveform,GENRE_WIN_SECONDARY,_secondary_label)
+    pa=_aggregate(pw); sa=_aggregate(sw)
+    if not pa["parent_scores"] and not sa["parent_scores"]: return None
+    ens=_ensemble(pa,sa); ppct=ens["parent_pct"]; spct=ens["subgenre_pct"]
+    if not ppct: return None
+    sorted_p=sorted(ppct.items(),key=lambda x:x[1],reverse=True)
+    top,top_score=sorted_p[0]
+    subs={}
+    for (p,s),pct in spct.items():
+        if s: subs.setdefault(p,[]).append({"label":s,"score":pct})
+    for p in subs: subs[p]=sorted(subs[p],key=lambda x:x["score"],reverse=True)[:GENRE_TOP_SUBGENRES]
+    top_sub=None
+    if spct:
+        bk=max(spct,key=lambda k:spct[k])
+        if bk[1]: top_sub={"parent":bk[0],"label":bk[1],"score":round(spct[bk],1)}
+    stab=_stability(pw+sw,top); sec=sorted_p[1][1] if len(sorted_p)>1 else 0.0; margin=top_score-sec
+    if stab>=0.75 and margin>=15:   cn="High confidence — consistent across the track"
+    elif stab>=0.50 and margin>=8:  cn="Moderate confidence — mostly consistent"
+    elif margin<5:                  cn="Low confidence — genre boundary is ambiguous"
+    else:                           cn="Mixed signal — track may blend multiple genres"
+    sources=([f"Primary ({GENRE_MODEL_PRIMARY.split('/')[1]}): {len(pw)} windows"] if pw else [])+\
+            ([f"Secondary ({GENRE_MODEL_SECONDARY.split('/')[1]}): {len(sw)} windows"] if sw else [])
+    return {"top":{"label":top,"score":round(top_score,1)},"all":[{"label":p,"score":s} for p,s in sorted_p[:10]],
+            "subgenres":subs,"top_subgenre":top_sub,"sources":sources,"window_count":len(pw+sw),
+            "stability":round(stab*100,1),"confidence_note":cn,"primary_used":bool(pw),"secondary_used":bool(sw)}
+
+# ── Audio conversion ──────────────────────────────────────────────────────────
+mel_transform = torchaudio.transforms.MelSpectrogram(sample_rate=SAMPLE_RATE,n_fft=1024,hop_length=160,n_mels=128)
+
+def convert_to_16k_wav(input_path, original_filename=None):
+    base="".join(c for c in os.path.splitext(os.path.basename(original_filename or input_path))[0]
+                 if c.isalnum() or c in (" ","-","_")).rstrip()
+    os.makedirs(CONVERTED_WAV_DIR,exist_ok=True)
+    out=os.path.join(CONVERTED_WAV_DIR,f"{base}_16khz.wav")
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-        print(f"  [ffmpeg] Converted to: {output_path}")
-        
-        # Get duration
-        duration_cmd = ['ffprobe', '-v', 'error', '-show_entries', 'format=duration', 
-                       '-of', 'default=noprint_wrappers=1:nokey=1', output_path]
-        duration_result = subprocess.run(duration_cmd, capture_output=True, text=True)
-        duration_sec = float(duration_result.stdout.strip()) if duration_result.stdout else 0
-        
-        return output_path, duration_sec
-    except subprocess.CalledProcessError as e:
-        print(f"  [ffmpeg] Error: {e.stderr}")
-        # Fall back to torchaudio
-        return convert_to_16k_wav_torchaudio(input_path, original_filename)
+        subprocess.run(["ffmpeg","-i",input_path,"-ar","16000","-ac","1","-c:a","pcm_s16le","-y",out],
+                       capture_output=True,text=True,check=True)
+        dur=subprocess.run(["ffprobe","-v","error","-show_entries","format=duration",
+                            "-of","default=noprint_wrappers=1:nokey=1",out],capture_output=True,text=True)
+        return out, float(dur.stdout.strip()) if dur.stdout.strip() else 0
+    except subprocess.CalledProcessError:
+        try: wav,sr=torchaudio.load(input_path)
+        except Exception:
+            data,sr=sf.read(input_path,always_2d=True); wav=torch.from_numpy(data.T).float()
+        if wav.shape[0]>1: wav=wav.mean(0,keepdim=True)
+        if sr!=SAMPLE_RATE: wav=torchaudio.transforms.Resample(sr,SAMPLE_RATE)(wav)
+        peak=wav.abs().max().item()
+        if peak>1e-6: wav=wav/peak
+        torchaudio.save(out,wav,SAMPLE_RATE,encoding="PCM_S",bits_per_sample=16)
+        return out, wav.shape[1]/SAMPLE_RATE
 
-
-def convert_to_16k_wav_torchaudio(input_path, original_filename=None):
-    """Fallback: Convert using torchaudio"""
-    try:
-        wav, sr = torchaudio.load(input_path)
-    except Exception:
-        data, sr = sf.read(input_path, always_2d=True)
-        wav = torch.from_numpy(data.T).float()
-
-    original_sr = sr
-    original_channels = wav.shape[0]
-
-    if wav.shape[0] > 1:
-        wav = wav.mean(dim=0, keepdim=True)
-
-    if sr != SAMPLE_RATE:
-        resampler = torchaudio.transforms.Resample(sr, SAMPLE_RATE)
-        wav = resampler(wav)
-        print(f"  [torchaudio] Resampled from {original_sr}Hz to {SAMPLE_RATE}Hz")
-
-    # Normalize peak
-    peak = wav.abs().max().item()
-    if peak > 1e-6:
-        wav = wav / peak
-
-    base_name = os.path.splitext(os.path.basename(original_filename or input_path))[0]
-    base_name = "".join(c for c in base_name if c.isalnum() or c in (' ', '-', '_')).rstrip()
-    
-    os.makedirs(CONVERTED_WAV_DIR, exist_ok=True)
-    output_path = os.path.join(CONVERTED_WAV_DIR, f"{base_name}_16khz.wav")
-    torchaudio.save(output_path, wav, SAMPLE_RATE, encoding='PCM_S', bits_per_sample=16)
-    
-    duration_sec = wav.shape[1] / SAMPLE_RATE
-    print(f"  [torchaudio] Saved to: {output_path}")
-    
-    return output_path, duration_sec
-
-
-def convert_to_16k_wav(input_path, ext, save_permanent=True, original_filename=None):
-    """Main conversion function - tries ffmpeg first, then torchaudio"""
-    return convert_to_16k_wav_ffmpeg(input_path, original_filename)
-
-
-def mel_from_chunk(chunk, is_lossy=False, ext='.wav'):
-    if is_lossy and USE_WAV_RECONSTRUCTION:
-        chunk = apply_wav_domain_reconstruction(chunk, ext)
-
-    mel    = mel_transform(chunk)
-    mel_db = torchaudio.functional.amplitude_to_DB(
-        mel, multiplier=10.0, amin=1e-10,
-        db_multiplier=0.0, top_db=80.0
-    )
-    mel_db = (mel_db - mel_db.mean()) / (mel_db.std() + 1e-9)
-    mel_db = mel_db.squeeze(0).transpose(0, 1)
-    T = mel_db.shape[0]
-    if T < 1024:
-        mel_db = torch.nn.functional.pad(mel_db, (0, 0, 0, 1024 - T))
-    elif T > 1024:
-        mel_db = mel_db[:1024, :]
-    return mel_db.unsqueeze(0)
-
-
-def apply_wav_domain_reconstruction(chunk_tensor, ext):
-    if not USE_WAV_RECONSTRUCTION:
-        return chunk_tensor
-
-    arr = chunk_tensor.squeeze().numpy().astype(np.float64)
-    sr  = SAMPLE_RATE
-
-    if ext in ('.mp3', '.aac', '.m4a'):
-        block = 576
-        fade  = 32
-        for b in range(block, len(arr) - block, block):
-            if b + fade >= len(arr):
-                break
-            fade_out = np.linspace(1.0, 0.0, fade)
-            fade_in  = np.linspace(0.0, 1.0, fade)
-            arr[b:b+fade] = arr[b:b+fade] * 0.7 + (
-                arr[b-fade:b] * fade_out + arr[b:b+fade] * fade_in) * 0.3
-
-    nyq    = sr / 2.0
-    hp_wn  = np.clip(40.0 / nyq, 1e-6, 0.9999)
-    sos_hp = butter(4, hp_wn, btype='high', output='sos')
-    arr    = sosfilt(sos_hp, arr)
-
-    if ext in ('.mp3', '.aac', '.m4a'):
-        hs_wn   = np.clip(6000.0 / nyq, 1e-6, 0.9999)
-        sos_hs  = butter(2, hs_wn, btype='high', output='sos')
-        hf_part = sosfilt(sos_hs, arr)
-        arr     = arr + 0.05 * hf_part
-
-    frame_len = int(sr * 0.020)
-    n_frames  = len(arr) // frame_len
-    rms_frames = np.array([
-        np.sqrt(np.mean(arr[i*frame_len:(i+1)*frame_len]**2) + 1e-12)
-        for i in range(n_frames)
-    ])
-    for i in range(1, n_frames - 1):
-        if rms_frames[i+1] > rms_frames[i] * 5.0 and rms_frames[i] < rms_frames[i-1] * 0.5:
-            start = i * frame_len
-            end   = min((i+1) * frame_len, len(arr))
-            arr[start:end] *= 0.6
-
-    rms_target = 10 ** (-16.0 / 20.0)
-    rms_actual = np.sqrt(np.mean(arr**2) + 1e-12)
-    if rms_actual > 1e-6:
-        gain = rms_target / rms_actual
-        gain = np.clip(gain, 0.1, 10.0)
-        arr  = arr * gain
-
-    arr = np.clip(arr, -1.0, 1.0)
-    return torch.from_numpy(arr.astype(np.float32)).unsqueeze(0)
-
+def mel_from_chunk(chunk):
+    m=mel_transform(chunk)
+    m=torchaudio.functional.amplitude_to_DB(m,10.0,1e-10,0.0,80.0)
+    m=(m-m.mean())/(m.std()+1e-9); m=m.squeeze(0).transpose(0,1); T=m.shape[0]
+    if T<1024: m=torch.nn.functional.pad(m,(0,0,0,1024-T))
+    elif T>1024: m=m[:1024,:]
+    return m.unsqueeze(0)
 
 def prepare_full_audio(waveform):
-    target_len = SAMPLE_RATE * DURATION
-    total      = waveform.shape[1]
-    total_secs = total / SAMPLE_RATE
+    target=SAMPLE_RATE*DURATION; total=waveform.shape[1]
+    return (torch.nn.functional.pad(waveform,(0,target-total)) if total<target else waveform[:,:target]), total/SAMPLE_RATE
 
-    if total < target_len:
-        chunk = torch.nn.functional.pad(waveform, (0, target_len - total))
-    else:
-        chunk = waveform[:, :target_len]
+# ── Acoustic features ─────────────────────────────────────────────────────────
+def _fft(a,n=1024): return np.abs(np.fft.rfft(a,n=n)), np.fft.rfftfreq(n,d=1/SAMPLE_RATE)
 
-    return chunk, total_secs
+def compute_spectral_flatness(a):
+    if np.sqrt(np.mean(a**2))<1e-6: return 0.0
+    spec=_fft(a)[0]**2+1e-10
+    return float(min(np.exp(np.mean(np.log(spec)))/np.mean(spec),0.70))
 
+def compute_dynamic_range(a,fl=1600):
+    f=[a[i:i+fl] for i in range(0,len(a)-fl,fl)]
+    return float(np.std([np.sqrt(np.mean(x**2)+1e-9) for x in f])) if f else 0.0
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  ACOUSTIC FEATURE EXTRACTION
-# ══════════════════════════════════════════════════════════════════════════════
-def compute_spectral_flatness(chunk_np):
-    spec  = np.abs(np.fft.rfft(chunk_np, n=1024)) ** 2 + 1e-10
-    geo   = np.exp(np.mean(np.log(spec)))
-    arith = np.mean(spec)
-    return float(geo / arith)
+def compute_zero_crossing_rate(a):
+    return float(np.sum(np.abs(np.diff(np.sign(a))))/2/len(a))
 
-def compute_dynamic_range(chunk_np, frame_len=1600):
-    frames = [chunk_np[i:i+frame_len] for i in range(0, len(chunk_np)-frame_len, frame_len)]
-    if not frames:
-        return 0.0
-    rms_vals = [np.sqrt(np.mean(f**2) + 1e-9) for f in frames]
-    return float(np.std(rms_vals))
+def compute_spectral_centroid(a):
+    mag,frq=_fft(a)
+    return float(np.sum(frq*mag)/(np.sum(mag)+1e-10)/(SAMPLE_RATE/2))
 
-def compute_zero_crossing_rate(chunk_np):
-    crossings = np.sum(np.abs(np.diff(np.sign(chunk_np)))) / 2
-    return float(crossings / len(chunk_np))
+def compute_spectral_rolloff(a,rp=0.85):
+    mag,frq=_fft(a); cs=np.cumsum(mag**2)
+    return float(frq[min(np.searchsorted(cs,rp*cs[-1]),len(frq)-1)]/(SAMPLE_RATE/2))
 
-def compute_spectral_centroid(chunk_np):
-    mag   = np.abs(np.fft.rfft(chunk_np, n=1024))
-    freqs = np.fft.rfftfreq(1024, d=1/SAMPLE_RATE)
-    denom = np.sum(mag) + 1e-10
-    return float(np.sum(freqs * mag) / denom / (SAMPLE_RATE / 2))
+def compute_temporal_flux(a,fl=1600):
+    f=[a[i:i+fl] for i in range(0,len(a)-fl,fl)]
+    if len(f)<2: return 0.0
+    sp=[np.abs(np.fft.rfft(x,n=min(1024,fl))) for x in f]
+    return float(np.mean([np.sum((sp[i+1]-sp[i])**2) for i in range(len(sp)-1)]))
 
-def compute_spectral_rolloff(chunk_np, roll_percent=0.85):
-    mag    = np.abs(np.fft.rfft(chunk_np, n=1024)) ** 2
-    freqs  = np.fft.rfftfreq(1024, d=1/SAMPLE_RATE)
-    cumsum = np.cumsum(mag)
-    idx    = min(np.searchsorted(cumsum, roll_percent * cumsum[-1]), len(freqs)-1)
-    return float(freqs[idx] / (SAMPLE_RATE / 2))
+def compute_noise_floor(a,fl=1600):
+    f=[a[i:i+fl] for i in range(0,len(a)-fl,fl)]
+    if not f: return 0.0
+    rms=sorted(float(np.sqrt(np.mean(x**2)+1e-12)) for x in f)
+    return float(np.mean(rms[:max(1,len(rms)//10)]))
 
-def compute_temporal_flux(chunk_np, frame_len=1600):
-    frames = [chunk_np[i:i+frame_len] for i in range(0, len(chunk_np)-frame_len, frame_len)]
-    if len(frames) < 2:
-        return 0.0
-    specs = [np.abs(np.fft.rfft(f, n=min(1024, frame_len))) for f in frames]
-    return float(np.mean([np.sum((specs[i+1]-specs[i])**2) for i in range(len(specs)-1)]))
+def compute_harmonic_ratio(a):
+    if np.sqrt(np.mean(a**2))<1e-6: return 0.0
+    mag=np.abs(np.fft.rfft(a[:min(4096,len(a))],n=min(4096,len(a))))**2
+    return float(np.clip(np.sum(mag[mag>=np.percentile(mag,95)])/(np.sum(mag)+1e-12),0,1))
+
+def compute_beat_regularity(a,sr=SAMPLE_RATE):
+    fl=512; hop=256
+    f=[a[i:i+fl] for i in range(0,len(a)-fl,hop)]
+    if len(f)<8: return 0.5
+    sp=[np.abs(np.fft.rfft(x,n=fl)) for x in f]
+    onset=np.array([max(0,np.sum(sp[i+1]-sp[i])) for i in range(len(sp)-1)])
+    onset=onset/(onset.max()+1e-9)
+    ac=np.correlate(onset,onset,mode='full')[len(onset)-1:]; ac=ac/(ac[0]+1e-9)
+    lo,hi=int(0.3*sr/hop),min(int(2.0*sr/hop),len(ac)-1)
+    return float(np.clip(np.max(ac[lo:hi]) if lo<hi else 0.5,0,1))
+
+def compute_pitch_stability(a,sr=SAMPLE_RATE):
+    fl=2048; hop=1024
+    f=[a[i:i+fl] for i in range(0,len(a)-fl,hop)]
+    if len(f)<4: return 0.5
+    freqs=[]
+    for x in f:
+        mag=np.abs(np.fft.rfft(x,n=fl)); frq=np.fft.rfftfreq(fl,d=1/sr)
+        mask=(frq>=80)&(frq<=4000)
+        if np.any(mask): freqs.append(frq[mask][np.argmax(mag[mask])])
+    if len(freqs)<3: return 0.5
+    mean=np.mean(freqs)
+    return 0.5 if mean<1e-3 else float(np.clip(1.0-np.std(freqs)/(mean+1e-6)*4,0,1))
 
 def compute_chunk_features(chunk_tensor):
-    arr = chunk_tensor.squeeze().numpy()
-    rms   = float(np.sqrt(np.mean(arr ** 2)) + 1e-9)
-    n_rms = np.clip(arr / rms * 0.1, -1.0, 1.0)
-    n_amp = np.clip(arr, -1.0, 1.0)
+    arr=chunk_tensor.squeeze().numpy()
+    rms=float(np.sqrt(np.mean(arr**2))+1e-9)
+    nrms=np.clip(arr/rms*0.1,-1.0,1.0); namp=np.clip(arr,-1.0,1.0)
     return {
-        'spectral_flatness':  compute_spectral_flatness(n_rms),
-        'dynamic_range':      compute_dynamic_range(n_amp),
-        'zero_crossing_rate': compute_zero_crossing_rate(n_rms),
-        'spectral_centroid':  compute_spectral_centroid(n_rms),
-        'spectral_rolloff':   compute_spectral_rolloff(n_rms),
-        'temporal_flux':      compute_temporal_flux(n_amp),
+        "spectral_flatness": compute_spectral_flatness(nrms),
+        "dynamic_range":     compute_dynamic_range(namp),
+        "zero_crossing_rate":compute_zero_crossing_rate(nrms),
+        "spectral_centroid": compute_spectral_centroid(namp),
+        "spectral_rolloff":  compute_spectral_rolloff(namp),
+        "temporal_flux":     compute_temporal_flux(namp),
+        "noise_floor":       compute_noise_floor(namp),
+        "harmonic_ratio":    compute_harmonic_ratio(namp),
+        "beat_regularity":   compute_beat_regularity(namp),
+        "pitch_stability":   compute_pitch_stability(namp),
     }
 
+# ── Scoring ───────────────────────────────────────────────────────────────────
+def _score(v,steps):
+    for thr,s in steps:
+        if v<thr: return s
+    return steps[-1][1]
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  FIXED SCORING HELPERS - More realistic scoring
-# ══════════════════════════════════════════════════════════════════════════════
-
-def exp_decay_score(val, scale, min_val=0, max_val=100):
-    """Exponential decay score - lower values = higher AI score"""
-    capped_val = min(val, 0.5)
-    raw_score = 100 * math.exp(-capped_val / scale)
-    return max(min_val, min(max_val, round(raw_score)))
-
-def asymmetric_gaussian_score(val, center, sigma_low, sigma_high):
-    """Gaussian score - values far from center = higher AI score"""
-    sigma = sigma_low if val < center else sigma_high
-    z = (val - center) / sigma
-    z = max(-3, min(3, z))
-    raw_score = 100 * (1 - math.exp(-0.5 * z * z))
-    return max(5, min(90, round(raw_score)))
-
-def compute_spectral_flatness_score(sf_mean):
-    """Special handling for spectral flatness - very flat or very tonal shouldn't auto-mean AI"""
-    if 0.1 <= sf_mean <= 0.4:
-        return max(5, min(40, round(100 * abs(sf_mean - 0.25) / 0.3)))
-    elif sf_mean < 0.05:
-        return 60
-    elif sf_mean > 0.6:
-        return 55
-    else:
-        return asymmetric_gaussian_score(sf_mean, SF_CENTER, SF_SIGMA_LOW, SF_SIGMA_HIGH)
-
-def compute_dynamic_range_score(dr_mean):
-    """Dynamic range scoring - very low dynamic range is common in mastered music"""
-    if dr_mean < 0.02:
-        return 40
-    elif dr_mean < 0.05:
-        return 35
-    elif dr_mean < 0.10:
-        return 30
-    elif dr_mean < 0.20:
-        return 20
-    else:
-        return 15
-
-def compute_harmonic_movement_score(sr_std):
-    """Harmonic movement - static highs are common in mastered tracks"""
-    if sr_std < 0.01:
-        return 45
-    elif sr_std < 0.03:
-        return 40
-    elif sr_std < 0.08:
-        return 30
-    else:
-        return 20
-
-def compute_tonal_variation_score(sc_std):
-    """Tonal variation - static brightness is common in electronic music"""
-    if sc_std < 0.05:
-        return 45
-    elif sc_std < 0.12:
-        return 35
-    elif sc_std < 0.25:
-        return 25
-    else:
-        return 15
+def sf_score(v): return _score(v,[(0.005,52),(0.04,44),(0.15,48),(0.30,55),(1,62)])
+def dr_score(v): return _score(v,[(0.0005,62),(0.001,56),(0.006,46),(0.015,44),(1,52)])
+def sc_score(v): return _score(v,[(0.02,58),(0.10,52),(0.30,44),(0.50,48),(1,54)])
+def sr_score(v): return _score(v,[(0.01,58),(0.05,52),(0.25,44),(0.50,48),(1,54)])
+def nf_score(v): return _score(v,[(0.0002,62),(0.001,56),(0.004,44),(0.015,46),(1,52)])
+def hr_score(v): return _score(v,[(0.35,52),(0.55,46),(0.75,44),(0.90,54),(1,62)])
+def br_score(v): return _score(v,[(0.25,52),(0.50,47),(0.75,44),(0.90,54),(1,60)])
+def ps_score(v): return _score(v,[(0.40,52),(0.60,46),(0.80,44),(0.92,56),(1,62)])
 
 def acoustic_composite_score(feat):
-    """Fixed acoustic composite score - more realistic weighting"""
-    
-    sf_score = compute_spectral_flatness_score(feat['spectral_flatness'])
-    dr_score = compute_dynamic_range_score(feat['dynamic_range'])
-    sc_score = compute_tonal_variation_score(feat['spectral_centroid'])
-    sr_score = compute_harmonic_movement_score(feat['spectral_rolloff'])
-    
-    tf_val = feat['temporal_flux']
-    if tf_val < 0.5:
-        tf_score = 50
-    elif tf_val < 1.0:
-        tf_score = 35
-    elif tf_val < 2.0:
-        tf_score = 25
-    else:
-        tf_score = 15
-    
-    zcr_val = feat['zero_crossing_rate']
-    if zcr_val < 0.05 or zcr_val > 0.45:
-        zcr_score = 50
-    elif zcr_val < 0.10 or zcr_val > 0.35:
-        zcr_score = 40
-    else:
-        zcr_score = 25
-    
-    composite = (
-        0.20 * sf_score +
-        0.20 * dr_score +
-        0.20 * sc_score +
-        0.20 * sr_score +
-        0.10 * tf_score +
-        0.10 * zcr_score
-    )
-    
-    return composite
+    tfs=_score(feat["temporal_flux"],  [(10,60),(200,54),(2000,44),(8000,48),(30000,52),(1e9,56)])
+    zcs=_score(feat["zero_crossing_rate"],[(0.02,58),(0.08,50),(0.20,44),(0.40,48),(1,56)])
+    return max(40,min(60,
+        0.13*sf_score(feat["spectral_flatness"])+0.13*dr_score(feat["dynamic_range"])+
+        0.12*sc_score(feat["spectral_centroid"])+0.12*sr_score(feat["spectral_rolloff"])+
+        0.10*tfs+0.10*zcs+0.12*nf_score(feat["noise_floor"])+
+        0.10*hr_score(feat["harmonic_ratio"])+0.09*br_score(feat["beat_regularity"])+
+        0.09*ps_score(feat["pitch_stability"])))
 
+# ── XAI ───────────────────────────────────────────────────────────────────────
+_AW = {"spectral_flatness":0.13,"dynamic_range":0.13,"tonal_variation":0.12,
+       "harmonic_movement":0.12,"section_consistency":0.10,"transient_character":0.10,
+       "noise_floor":0.12,"harmonic_ratio":0.10,"beat_regularity":0.09,"pitch_stability":0.09}
 
-def compression_penalty(feat, is_lossy):
-    if not is_lossy:
-        return 1.0
-    sf_penalty = max(0.0, min(0.03, (feat['spectral_flatness'] - 0.25) * 0.5))
-    dr_penalty = max(0.0, min(0.03, 0.12 - feat['dynamic_range'] * 5))
-    return 1.0 - (sf_penalty + dr_penalty) * 0.3
+def _badge(s): return "AI-like" if s>=55 else ("Human-like" if s<=45 else "Neutral")
 
+def _xfeat(id,label,score,value,wkey,what,why,is_primary=False):
+    w = NEURAL_WEIGHT if is_primary else ACOUSTIC_WEIGHT*_AW.get(wkey,0.10)
+    return {"id":id,"label":label,"score":max(0,min(100,round(score))),"value":value,
+            "badge":_badge(score),"weight":w,"weight_label":f"{round(w*100)}% of final score",
+            "is_primary":is_primary,"what":what,"why":why}
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  XAI SCORING WITH FIXED EXPLANATIONS
-# ══════════════════════════════════════════════════════════════════════════════
+def score_features_for_xai(feat, neural_prob, final_ai_probability=None):
+    ns=max(0,min(100,round(neural_prob*100)))
+    nb="AI-like" if ns>=60 else ("Neutral" if ns>=40 else "Human-like")
+    nw=(f"Strong AI signal ({ns}%) — unnaturally smooth transitions, overly regular harmonics, or absent micro-imperfections matching AI training examples." if ns>=80 else
+        f"Leans AI-generated ({ns}%) — some spectral patterns match AI audio but not definitively. Acoustic features below give more context." if ns>=60 else
+        f"Borderline score ({ns}%) — near the midpoint where AI vs human is ambiguous. Common with heavily produced or unusual-genre music." if ns>=40 else
+        f"Leans human ({ns}%) — spectral patterns consistent with real recordings: natural imperfections, organic harmonics, subtle noise floor.")
 
-def score_features_for_xai(feat, neural_prob, eff_neural_w, eff_acoustic_w, final_ai_probability=None, is_lossy=False):
-    def clip(v, lo=0, hi=100): return max(lo, min(hi, round(v)))
+    sfv=feat["spectral_flatness"]; sfs=sf_score(sfv)
+    sfw=(f"Very low ({sfv:.3f}) — tonal purity suggests synthesis or heavy filtering." if sfv<0.2 else
+         f"{sfv:.3f} — natural balance of tonal content and background texture. Typical of real instruments." if sfv<=0.45 else
+         f"{sfv:.3f} — higher side, energy spread fairly evenly. Dense mix, heavy reverb, or synthesised textures." if sfv<=0.7 else
+         f"High ({sfv:.3f}) — near noise-like distribution. More typical of synthesised or heavily processed audio.")
 
-    feats = []
-    neural_score = clip(neural_prob * 100)
+    drv=feat["dynamic_range"]; drs=dr_score(drv)
+    drw=(f"Extremely low ({drv:.4f}) — loudness barely changes. Suggests heavy limiting or synthesis." if drv<0.01 else
+         f"{drv:.4f} — heavily compressed, little variation between sections." if drv<0.03 else
+         f"{drv:.4f} — typical range for professionally produced music." if drv<0.08 else
+         f"{drv:.4f} — fairly high, noticeable contrast between quiet and loud passages." if drv<0.15 else
+         f"Very high ({drv:.4f}) — dramatic loudness swings, consistent with live or unmastered material.")
 
-    is_final_human = final_ai_probability is not None and final_ai_probability < (68 if is_lossy else 60)
-    is_mastered = feat['dynamic_range'] < 0.08
-    static_harmonics = feat['spectral_rolloff'] < 0.02
+    scv=feat["spectral_centroid"]; scs=sc_score(scv)
+    scw=(f"Near zero ({scv:.4f}) — near-silent, very bass-heavy, or corrupted signal." if scv<0.02 else
+         f"{scv:.4f} — dominated by bass/low-mids with little treble." if scv<0.08 else
+         f"{scv:.4f} — balanced spread from bass through treble, typical of real arrangements." if scv<0.15 else
+         f"{scv:.4f} — moderately bright with notable treble content (cymbals, presence range)." if scv<0.30 else
+         f"High ({scv:.4f}) — predominantly treble-heavy, may indicate noise or distortion.")
 
-    show_override = is_final_human and neural_score < 45 and (static_harmonics or is_mastered)
+    srv=feat["spectral_rolloff"]; srs=sr_score(srv)
+    srw=(f"Near zero ({srv:.4f}) — almost no energy above the bass range." if srv<0.01 else
+         f"{srv:.4f} — 85% of energy in the deep bass. Heavy low-pass filtering." if srv<0.05 else
+         f"{srv:.4f} — typical range, most energy in bass-to-mid zone with natural treble taper." if srv<0.25 else
+         f"{srv:.4f} — moderately high, bright or treble-forward mix." if srv<0.50 else
+         f"Very high ({srv:.4f}) — dominant high-frequency content, may indicate noise or synthesis.")
 
-    if neural_score >= 70:
-        neural_why = f'The neural model detected synthesis artifacts or processing patterns consistent with AI generation ({neural_score}%).'
-    elif neural_score >= 45:
-        neural_why = f'The neural model shows mixed signals ({neural_score}%). Some characteristics lean AI while others appear natural.'
-    else:
-        if show_override:
-            neural_why = f'The neural model detected human-like spectrogram patterns ({neural_score}%). Despite static acoustic features (common in professionally mastered tracks), the neural model correctly identifies natural vocal/instrumental characteristics.'
-        else:
-            neural_why = f'The neural model detected human-like spectrogram patterns ({neural_score}%). Raw characteristics are consistent with natural audio.'
+    tfv=feat["temporal_flux"]; tfs2=_score(tfv,[(10,60),(200,54),(2000,44),(8000,48),(30000,52),(1e9,56)])
+    tfw=(f"Near-zero ({tfv:,.0f}) — essentially static audio with no musical movement." if tfv<10 else
+         f"Low ({tfv:,.0f}) — very slow evolution, more typical of synthesised pads or drones." if tfv<200 else
+         f"Healthy range ({tfv:,.0f}) — natural musical activity consistent with a real performance." if tfv<2000 else
+         f"Fairly active ({tfv:,.0f}) — dense or percussive music with many transient events." if tfv<8000 else
+         f"High ({tfv:,.0f}) — very energetic or heavily compressed signal." if tfv<30000 else
+         f"Extremely high ({tfv:,.0f}) — approaching noise-like behaviour.")
 
-    feats.append({
-        'id': 'neural_score', 'label': 'Neural Spectrogram Score',
-        'score': neural_score, 'value': f"{neural_prob:.3f}",
-        'weight': eff_neural_w,
-        'weight_label': f'{round(eff_neural_w * 100)}% of final score',
-        'is_primary': True,
-        'what': 'AI probability from the deep neural model on full audio.',
-        'why': neural_why,
-        'direction': 'higher = more AI-like patterns in the raw spectrogram',
-        'overridden_by_neural': False,
-    })
+    zcrv=feat["zero_crossing_rate"]; zcrs=_score(zcrv,[(0.02,58),(0.08,50),(0.20,44),(0.40,48),(1,56)])
+    zcrw=(f"Very low ({zcrv:.3f}) — smooth, low-frequency dominated signal." if zcrv<0.05 else
+          f"{zcrv:.3f} — typical range, natural balance of frequencies with organic transients." if zcrv<0.15 else
+          f"{zcrv:.3f} — moderately high, significant high-frequency or percussive content." if zcrv<0.35 else
+          f"High ({zcrv:.3f}) — very frequent crossings, dominant high-frequency or noise-like signal.")
 
-    acoustic_feature_weights = {
-        'spectral_flatness':   0.20,
-        'dynamic_range':       0.20,
-        'tonal_variation':     0.20,
-        'harmonic_movement':   0.20,
-        'section_consistency': 0.10,
-        'transient_character': 0.10,
-    }
+    nfv=feat["noise_floor"]; nfs=nf_score(nfv)
+    nfw=(f"Near-zero ({nfv:.5f}) — perfectly silent gaps between notes. Real recordings always carry room/mic/tape noise; an absent floor strongly suggests synthesis." if nfv<0.0002 else
+         f"Very low ({nfv:.5f}) — quieter than most real recordings. Well-treated studio, aggressive noise reduction, or synthesised source." if nfv<0.001 else
+         f"{nfv:.5f} — natural range for a real recording, consistent with studio mic self-noise or light tape saturation." if nfv<0.004 else
+         f"Moderately elevated ({nfv:.5f}) — noticeable background noise from a live environment or older equipment." if nfv<0.015 else
+         f"High ({nfv:.5f}) — substantial background noise. Typical of field recordings, live performances, or lo-fi material.")
 
-    # Spectral Flatness
-    sf_mean = feat['spectral_flatness']
-    sf_score = compute_spectral_flatness_score(sf_mean)
-    
-    if sf_mean < 0.05:
-        sf_why = f'Very tonal spectrum detected (flatness={sf_mean:.3f}). This can indicate synthesized sound, but is also common in electronic music and simple instrumentation.'
-    elif sf_mean > 0.6:
-        sf_why = f'Noise-like spectrum detected (flatness={sf_mean:.3f}). This is common in heavily compressed/mastered tracks — not necessarily AI.'
-    elif 0.1 <= sf_mean <= 0.4:
-        sf_why = f'Spectral flatness is in the natural human range ({sf_mean:.3f}) — consistent with real instruments and vocals.'
-    else:
-        sf_why = f'Spectral flatness ({sf_mean:.3f}) is somewhat outside typical range, but not strongly indicative of AI generation.'
+    hrv=feat["harmonic_ratio"]; hrs=hr_score(hrv); hrp=round(hrv*100,1)
+    hrw=(f"Very high ({hrp}%) — near-perfect harmonic series with almost no inter-harmonic noise. Strongly characteristic of synthesised instruments or AI-generated music." if hrv>0.90 else
+         f"High ({hrp}%) — most energy in harmonic peaks with limited noise between them. Clean studio or largely synthesised instrumentation." if hrv>0.75 else
+         f"{hrp}% — natural balance of harmonic peaks and inter-harmonic noise from resonance, breath, and room reflections." if hrv>0.55 else
+         f"{hrp}% — notable noise energy between harmonics, typical of distorted guitars, drums, or percussive material." if hrv>0.35 else
+         f"Low ({hrp}%) — predominantly noise-like with weak harmonic structure. Heavy distortion, percussion, or atonal content.")
 
-    feats.append({
-        'id': 'spectral_flatness', 'label': 'Spectral Flatness',
-        'score': sf_score, 'value': f"{sf_mean:.3f}",
-        'weight': eff_acoustic_w * acoustic_feature_weights['spectral_flatness'],
-        'weight_label': f'{round(eff_acoustic_w * acoustic_feature_weights["spectral_flatness"] * 100)}% of final score',
-        'is_primary': False,
-        'what': 'How "noisy" vs "tonal" the frequency content is.',
-        'why': sf_why,
-        'direction': 'extreme values (too flat OR too tonal) may indicate synthesis',
-        'overridden_by_neural': is_final_human and sf_score > 50 and neural_score < 45,
-    })
+    brv=feat["beat_regularity"]; brs=br_score(brv); brp=round(brv*100,1)
+    brw=(f"Very high ({brp}%) — near-perfectly metronomic. Characteristic of grid-quantised AI or DAW music; human performers always drift slightly." if brv>0.90 else
+         f"High ({brp}%) — very consistent rhythm with minor fluctuations. Tight drummer, quantised performance, or drum-machine production." if brv>0.75 else
+         f"{brp}% — clear pulse with detectable human timing variations. Typical of live drumming or performances without heavy quantisation." if brv>0.50 else
+         f"Low ({brp}%) — considerable timing variation. Free-time playing, rubato, or music without a steady pulse." if brv>0.25 else
+         f"Very low ({brp}%) — no clear repeating rhythmic pulse. Free-tempo, ambient, or heavily textural material.")
 
-    # Dynamic Range
-    dr_mean = feat['dynamic_range']
-    dr_score = compute_dynamic_range_score(dr_mean)
-    
-    if dr_mean < 0.03:
-        dr_why = f'Very steady loudness detected ({dr_mean:.4f}). This is extremely common in modern mastered music — NOT a reliable AI indicator on its own.'
-    elif dr_mean < 0.08:
-        dr_why = f'Limited dynamic range ({dr_mean:.4f}). Typical of produced and mastered music — not strongly indicative of AI.'
-    else:
-        dr_why = f'Good loudness variation ({dr_mean:.4f}) — consistent with natural performances and dynamic recordings.'
-    
-    feats.append({
-        'id': 'dynamic_range', 'label': 'Dynamic Range',
-        'score': dr_score, 'value': f"{dr_mean:.4f}",
-        'weight': eff_acoustic_w * acoustic_feature_weights['dynamic_range'],
-        'weight_label': f'{round(eff_acoustic_w * acoustic_feature_weights["dynamic_range"] * 100)}% of final score',
-        'is_primary': False,
-        'what': 'How much the loudness level varies within the track.',
-        'why': dr_why,
-        'direction': 'lower variation = potentially more processed (not necessarily AI)',
-        'overridden_by_neural': False,
-    })
+    psv=feat["pitch_stability"]; pss=ps_score(psv); psp=round(psv*100,1)
+    psw=(f"Very high ({psp}%) — pitch barely moves. Synthesised audio locks to exact frequencies with no vibrato or drift; real performers always vary." if psv>0.92 else
+         f"High ({psp}%) — very consistent pitch. Well-tuned studio, pitch-corrected vocals, synthesised melody, or a stable instrument like piano or organ." if psv>0.80 else
+         f"{psp}% — natural range, moderate variation consistent with vibrato, vocal intonation, or melodic movement." if psv>0.60 else
+         f"Moderate-low ({psp}%) — significant pitch variation. Expressive playing (bends, jazz phrasing) or wide melodic leaps." if psv>0.40 else
+         f"Low ({psp}%) — dominant pitch varies widely. Percussion-heavy, atonal, or rapid harmonic movement.")
 
-    # Tonal Variation
-    sc_std = feat['spectral_centroid']
-    sc_score = compute_tonal_variation_score(sc_std)
-    
-    if sc_std < 0.05:
-        sc_why = f'The tonal balance is very static ({sc_std:.4f}). Common in electronic music and loop-based production — not a strong AI indicator.'
-    elif sc_std < 0.12:
-        sc_why = f'The tonal balance is somewhat static ({sc_std:.4f}). Typical of produced music with consistent instrumentation.'
-    else:
-        sc_why = f'Natural tonal variation detected ({sc_std:.4f}) — the sound brightens and darkens naturally.'
-    
-    feats.append({
-        'id': 'tonal_variation', 'label': 'Tonal Variation',
-        'score': sc_score, 'value': f"{sc_std:.4f}",
-        'weight': eff_acoustic_w * acoustic_feature_weights['tonal_variation'],
-        'weight_label': f'{round(eff_acoustic_w * acoustic_feature_weights["tonal_variation"] * 100)}% of final score',
-        'is_primary': False,
-        'what': 'How much the brightness of the sound changes across the track.',
-        'why': sc_why,
-        'direction': 'less brightness change = more static production',
-        'overridden_by_neural': False,
-    })
+    feats=[
+        _xfeat("neural_score","Neural spectrogram score",ns,f"{neural_prob:.3f}","neural",
+               "The deep neural network analyses the full mel-spectrogram and returns a probability the audio was AI-generated. Trained on thousands of real and AI-produced tracks.",nw,is_primary=True),
+        _xfeat("spectral_flatness","Frequency distribution",sfs,f"{sfv:.3f}","spectral_flatness",
+               "Whether energy is concentrated at specific musical pitches (tonal) or spread evenly like noise (flat). Real instruments produce strong harmonics at predictable frequencies.",sfw),
+        _xfeat("dynamic_range","Loudness variation",drs,f"{drv:.4f}","dynamic_range",
+               "How much loudness changes moment-to-moment. Human performances breathe naturally — verses quieter, choruses louder. AI audio can lack this organic variation.",drw),
+        _xfeat("tonal_variation","Tonal brightness",scs,f"{scv:.4f}","tonal_variation",
+               "Where the spectral 'centre of mass' sits — bass, mids, or treble. Real music has a predictable brightness range by genre; outliers suggest synthesis or artefacts.",scw),
+        _xfeat("harmonic_movement","High-frequency activity",srs,f"{srv:.4f}","harmonic_movement",
+               "The frequency below which 85% of energy sits. Low rolloff = bass-heavy; high = treble-prominent. Abnormally low values suggest filtering or synthesis.",srw),
+        _xfeat("section_consistency","Moment-to-moment change",tfs2,f"{tfv:,.0f}","section_consistency",
+               "How rapidly frequency content changes frame-to-frame. Very low = static/synthesised; moderate = real performance; extreme = noise or heavy processing.",tfw),
+        _xfeat("transient_character","Attack sharpness",zcrs,f"{zcrv:.3f}","transient_character",
+               "How often the waveform crosses zero per second — proxy for high-frequency and percussive content. Real music falls in a predictable range by genre.",zcrw),
+        _xfeat("noise_floor","Background noise floor",nfs,f"{nfv:.5f}","noise_floor",
+               "The amplitude level during the quietest 10% of the track. Real recordings always carry residual noise from microphones, rooms, and electronics. AI audio often has a perfectly silent floor.",nfw),
+        _xfeat("harmonic_ratio","Harmonic purity",hrs,f"{hrp}%","harmonic_ratio",
+               "The proportion of energy at distinct harmonic frequencies vs. noise between them. Synthesised sources produce near-perfect harmonic series; real instruments add inter-harmonic noise from physical resonance.",hrw),
+        _xfeat("beat_regularity","Rhythmic regularity",brs,f"{brp}%","beat_regularity",
+               "How metronomically consistent the rhythm is. AI and DAW music is quantised to a perfect grid. Human performers always introduce micro-timing variations that give music its feel.",brw),
+        _xfeat("pitch_stability","Pitch consistency",pss,f"{psp}%","pitch_stability",
+               "How consistently the dominant pitch holds its frequency. AI and synthesised instruments are perfectly stable; humans add vibrato, intonation drift, and portamento.",psw),
+    ]
+    primary=[f for f in feats if f["is_primary"]]
+    secondary=sorted([f for f in feats if not f["is_primary"]],key=lambda x:x["score"],reverse=True)
+    return primary+secondary
 
-    # Harmonic Movement
-    sr_std = feat['spectral_rolloff']
-    sr_score = compute_harmonic_movement_score(sr_std)
+# ── Verdict ───────────────────────────────────────────────────────────────────
+def derive_verdict(p):
+    if p>=AI_THRESHOLD: return "Likely AI-generated", f"Patterns lean toward AI generation ({p}%)"
+    if p>=50:           return "Not Sure",             f"Signal is ambiguous — could be AI or human ({p}%)"
+    return "Likely Human", f"Patterns lean toward human performance ({100-p}%)"
 
-    if sr_std < 0.01:
-        sr_why = f'The high-frequency content is very static ({sr_std:.4f}). This is extremely common in professionally mastered recordings and electronic music — NOT a reliable AI indicator.'
-    elif sr_std < 0.03:
-        sr_why = f'The high-frequency content is somewhat static ({sr_std:.4f}). Typical of modern production with heavy limiting and compression.'
-    else:
-        sr_why = f'Natural harmonic movement detected ({sr_std:.4f}) — consistent with live performance and acoustic instruments.'
+# ── Load models ───────────────────────────────────────────────────────────────
+print(f"[*] Loading AI detection model on {device}...")
+ast_backbone=ASTModel.from_pretrained("MIT/ast-finetuned-audioset-10-10-0.4593")
+model=HybridASTDetector(ast_backbone).to(device)
+if not os.path.exists(CHECKPOINT_PATH): raise FileNotFoundError(f"Checkpoint not found: {CHECKPOINT_PATH}")
+ckpt=torch.load(CHECKPOINT_PATH,map_location=device)
+model.load_state_dict(ckpt["model_state_dict"]); model.eval()
+print(f"[✓] AI detector loaded — epoch={ckpt.get('epoch',0)+1}  val_acc={ckpt.get('val_acc',0):.2%}  device={device}")
 
-    feats.append({
-        'id': 'harmonic_movement', 'label': 'Harmonic Movement',
-        'score': sr_score, 'value': f"{sr_std:.4f}",
-        'weight': eff_acoustic_w * acoustic_feature_weights['harmonic_movement'],
-        'weight_label': f'{round(eff_acoustic_w * acoustic_feature_weights["harmonic_movement"] * 100)}% of final score',
-        'is_primary': False,
-        'what': 'How much the high-frequency energy shifts across the track.',
-        'why': sr_why,
-        'direction': 'less high-frequency movement = more heavily mastered',
-        'overridden_by_neural': is_final_human and sr_score > 50 and neural_score < 45,
-    })
+print(f"[*] Loading primary genre classifier ({GENRE_MODEL_PRIMARY})...")
+try:
+    genre_pipeline_primary=pipeline("audio-classification",model=GENRE_MODEL_PRIMARY,
+                                    device=0 if torch.cuda.is_available() else -1)
+    GENRE_PRIMARY_AVAILABLE=True; print("[✓] Primary genre classifier loaded")
+except Exception as e:
+    print(f"[!] Primary genre classifier failed: {e}"); genre_pipeline_primary=None; GENRE_PRIMARY_AVAILABLE=False
 
-    # Section Consistency
-    tf_cv = feat['temporal_flux']
-    if tf_cv < 0.5:
-        tf_score = 50
-        tf_why = 'The audio is very uniform section-to-section. AI-generated music can have similar-sounding blocks, but so can highly produced electronic music.'
-    elif tf_cv < 1.0:
-        tf_score = 35
-        tf_why = 'Moderate energy variation throughout the track. This is typical of produced music.'
-    else:
-        tf_score = 20
-        tf_why = 'Natural energy variation throughout the track — consistent with human performances.'
-    
-    feats.append({
-        'id': 'section_consistency', 'label': 'Section Consistency',
-        'score': tf_score, 'value': f"{tf_cv:.3f}",
-        'weight': eff_acoustic_w * acoustic_feature_weights['section_consistency'],
-        'weight_label': f'{round(eff_acoustic_w * acoustic_feature_weights["section_consistency"] * 100)}% of final score',
-        'is_primary': False,
-        'what': 'How consistent the energy is throughout the track.',
-        'why': tf_why,
-        'direction': 'less relative change = more uniform production',
-        'overridden_by_neural': False,
-    })
+print(f"[*] Loading secondary genre classifier ({GENRE_MODEL_SECONDARY})...")
+try:
+    genre_pipeline_secondary=pipeline("audio-classification",model=GENRE_MODEL_SECONDARY,
+                                      device=0 if torch.cuda.is_available() else -1,trust_remote_code=True)
+    GENRE_SECONDARY_AVAILABLE=True; print("[✓] Secondary genre classifier loaded (MAEST 10s, 400 Discogs styles)")
+except Exception as e:
+    print(f"[!] Secondary genre classifier failed: {e}"); genre_pipeline_secondary=None; GENRE_SECONDARY_AVAILABLE=False
 
-    # Transient Character
-    zcr_mean = feat['zero_crossing_rate']
-    if zcr_mean < 0.05 or zcr_mean > 0.45:
-        zcr_score = 50
-        zcr_why = f'Unusual transient pattern detected ({zcr_mean:.3f}). This can occur with heavy processing, synthesis, or extreme compression.'
-    elif zcr_mean < 0.10 or zcr_mean > 0.35:
-        zcr_score = 40
-        zcr_why = f'Somewhat unusual transient character ({zcr_mean:.3f}). May indicate processing or synthesis.'
-    else:
-        zcr_score = 25
-        zcr_why = f'Natural transient character ({zcr_mean:.3f}) — typical of real instruments and voice recordings.'
-    
-    feats.append({
-        'id': 'transient_character', 'label': 'Transient Character',
-        'score': zcr_score, 'value': f"{zcr_mean:.3f}",
-        'weight': eff_acoustic_w * acoustic_feature_weights['transient_character'],
-        'weight_label': f'{round(eff_acoustic_w * acoustic_feature_weights["transient_character"] * 100)}% of final score',
-        'is_primary': False,
-        'what': 'How sharp or smooth the audio signal transitions are.',
-        'why': zcr_why,
-        'direction': 'extreme values may indicate synthesis or heavy processing',
-        'overridden_by_neural': False,
-    })
+GENRE_AVAILABLE=GENRE_PRIMARY_AVAILABLE or GENRE_SECONDARY_AVAILABLE
 
-    primary = [f for f in feats if f['is_primary']]
-    secondary = sorted([f for f in feats if not f['is_primary']], key=lambda x: x['score'], reverse=True)
-    return primary + secondary
+# ── Routes ────────────────────────────────────────────────────────────────────
+@app.route("/")
+def index(): return send_from_directory(".", "index.html")
 
+@app.route("/converted_wavs/<path:filename>")
+def serve_converted_wav(filename): return send_from_directory(CONVERTED_WAV_DIR, filename)
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  LABEL + CONFIDENCE
-# ══════════════════════════════════════════════════════════════════════════════
-def derive_verdict(ai_probability, is_lossy=False):
-    threshold = AI_THRESHOLD_LOSSY if is_lossy else AI_THRESHOLD_LOSSLESS
-
-    if ai_probability >= threshold:
-        confidence = 'High confidence' if ai_probability >= 85 else 'Moderate confidence'
-        explanation = f'Strong AI-like patterns detected ({ai_probability}%).' if ai_probability >= 85 else f'The neural model and acoustic features lean toward AI ({ai_probability}%), but some natural characteristics also present.'
-        return ('Likely AI-generated', confidence, explanation)
-    else:
-        confidence = 'High confidence' if ai_probability <= 30 else 'Moderate confidence'
-        explanation = f'Strong human-like patterns detected ({100 - ai_probability}%).' if ai_probability <= 30 else f'The neural model and acoustic features lean toward human ({100 - ai_probability}%), but some AI-like characteristics also present.'
-        return ('Likely Human', confidence, explanation)
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  LOAD MODEL
-# ══════════════════════════════════════════════════════════════════════════════
-print(f"[*] Loading model on {device}...")
-ast_backbone = ASTModel.from_pretrained("MIT/ast-finetuned-audioset-10-10-0.4593")
-model        = HybridASTDetector(ast_backbone).to(device)
-
-if not os.path.exists(CHECKPOINT_PATH):
-    raise FileNotFoundError(f"Checkpoint not found: {CHECKPOINT_PATH}")
-
-ckpt = torch.load(CHECKPOINT_PATH, map_location=device)
-model.load_state_dict(ckpt['model_state_dict'])
-model.eval()
-
-val_acc = ckpt.get('val_acc', 0)
-epoch   = ckpt.get('epoch', 0) + 1
-print(f"[✓] Loaded  epoch={epoch}  val_acc={val_acc:.2%}  device={device}")
-print(f"[*] Neural weights: lossless={NEURAL_WEIGHT_LOSSLESS:.0%}  lossy={NEURAL_WEIGHT_LOSSY:.0%}")
-print(f"[*] Acoustic weights: lossless={ACOUSTIC_WEIGHT_LOSSLESS:.0%}  lossy={ACOUSTIC_WEIGHT_LOSSY:.0%}")
-print(f"[*] AI thresholds: lossless={AI_THRESHOLD_LOSSLESS}%  lossy={AI_THRESHOLD_LOSSY}%")
-print(f"[*] PERMANENT WAV CONVERSION: {'ENABLED' if SAVE_CONVERTED_WAV else 'DISABLED'}")
-print(f"[*] Converted WAV directory: {CONVERTED_WAV_DIR}")
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  ROUTES
-# ══════════════════════════════════════════════════════════════════════════════
-@app.route('/')
-def index():
-    return send_from_directory('.', 'index.html')
-
-
-@app.route('/converted_wavs/<path:filename>')
-def serve_converted_wav(filename):
-    """Serve converted WAV files for playback/download"""
-    return send_from_directory(CONVERTED_WAV_DIR, filename)
-
-
-@app.route('/debug/last_analysis', methods=['GET'])
+@app.route("/debug/last_analysis")
 def debug_last_analysis():
-    """Debug endpoint to check what file was last analyzed"""
     import glob
-    wav_files = glob.glob(os.path.join(CONVERTED_WAV_DIR, "*.wav"))
-    return jsonify({
-        'converted_wav_dir': CONVERTED_WAV_DIR,
-        'wav_files_found': len(wav_files),
-        'files': [os.path.basename(f) for f in wav_files],
-        'message': 'These are the actual WAV files being analyzed'
-    })
-    
+    return jsonify({"converted_wav_dir":CONVERTED_WAV_DIR,
+                    "wav_files_found":len(glob.glob(os.path.join(CONVERTED_WAV_DIR,"*.wav"))),
+                    "genre_available":GENRE_AVAILABLE,
+                    "genre_primary":GENRE_MODEL_PRIMARY if GENRE_PRIMARY_AVAILABLE else None,
+                    "genre_secondary":GENRE_MODEL_SECONDARY if GENRE_SECONDARY_AVAILABLE else None,
+                    "genre_windows_per_model":GENRE_N_WINDOWS})
 
+# ── /report — misclassification feedback ─────────────────────────────────────
+@app.route("/report", methods=["POST"])
+def report():
+    try:
+        data = request.get_json(force=True)
+        if not data:
+            return jsonify({"error": "No JSON body received."}), 400
 
-@app.route('/classify', methods=['POST'])
+        required = {"filename", "original_verdict", "correct_label", "reason"}
+        missing  = required - data.keys()
+        if missing:
+            return jsonify({"error": f"Missing fields: {', '.join(missing)}"}), 400
+
+        report_id = str(uuid.uuid4())[:8].upper()
+        record = {
+            "report_id":        report_id,
+            "timestamp":        datetime.datetime.utcnow().isoformat() + "Z",
+            "filename":         str(data.get("filename",        "unknown"))[:300],
+            "original_verdict": str(data.get("original_verdict",""))[:100],
+            "ai_probability":   float(data.get("ai_probability", 0)),
+            "correct_label":    str(data.get("correct_label",   ""))[:50],
+            "reason":           str(data.get("reason",          ""))[:100],
+            "comment":          str(data.get("comment",         ""))[:500],
+            "genre":            data.get("genre"),
+            "codec_detected":   bool(data.get("codec_detected", False)),
+        }
+
+        with open(REPORTS_FILE, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(record) + "\n")
+
+        print(f"  [report] {report_id} — {record['filename']} | "
+              f"verdict={record['original_verdict']} → {record['correct_label']} | "
+              f"reason={record['reason']}")
+
+        return jsonify({"ok": True, "report_id": report_id}), 200
+
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+# ── /classify ─────────────────────────────────────────────────────────────────
+@app.route("/classify", methods=["POST"])
 def classify():
-    files = request.files.getlist('files')
-    if not files or files[0].filename == '':
-        return jsonify({'error': 'No files uploaded.'}), 400
-
-    results = []
-
+    files=request.files.getlist("files")
+    if not files or files[0].filename=="":
+        return jsonify({"error":"No files uploaded."}),400
+    results=[]
     for f in files:
-        filename = f.filename
-        original_ext = os.path.splitext(filename)[1].lower()
-
-        if original_ext not in SUPPORTED_EXTS:
-            results.append({'filename': filename, 'error': f'Unsupported format: {original_ext}'})
-            continue
-
-        is_lossy_original = original_ext in LOSSY_EXTS
-
-        with tempfile.NamedTemporaryFile(suffix=original_ext, delete=False) as tmp:
-            tmp_path = tmp.name
-            f.save(tmp_path)
-
-        wav_path = None
-
+        filename=f.filename; ext=os.path.splitext(filename)[1].lower()
+        if ext not in SUPPORTED_EXTS:
+            results.append({"filename":filename,"error":f"Unsupported format: {ext}"}); continue
+        with tempfile.NamedTemporaryFile(suffix=ext,delete=False) as tmp:
+            tmp_path=tmp.name; f.save(tmp_path)
         try:
-            print(f"\n{'='*60}")
-            print(f"[→] INPUT: {filename} (original format: {original_ext})")
-            print(f"{'='*60}")
+            print(f"\n{'='*60}\n[→] {filename}\n{'='*60}")
+            wav_path,total_secs=convert_to_16k_wav(tmp_path,original_filename=filename)
+            if not os.path.exists(wav_path): raise FileNotFoundError(f"WAV not created: {wav_path}")
+            data,sr=sf.read(wav_path,always_2d=True)
+            waveform=torch.from_numpy(data.T).float()
+            if sr!=SAMPLE_RATE: waveform=torchaudio.transforms.Resample(sr,SAMPLE_RATE)(waveform); sr=SAMPLE_RATE
+            chunk,_=prepare_full_audio(waveform)
+            if chunk.shape[1]<16000: raise ValueError("Audio too short (< 1 second).")
 
-            # STEP 1: Convert original to 16kHz WAV using ffmpeg
-            wav_path, total_secs = convert_to_16k_wav(
-                tmp_path, original_ext, 
-                save_permanent=True, 
-                original_filename=filename
-            )
-            
-            if not os.path.exists(wav_path):
-                raise FileNotFoundError(f"WAV file was not created: {wav_path}")
-            
-            print(f"\n  ✅ [VERIFY] WAV file exists at: {wav_path}")
-            print(f"  ✅ [VERIFY] File size: {os.path.getsize(wav_path)} bytes")
-
-            # STEP 2: RELOAD using soundfile
-            print(f"\n  [RELOAD] Loading converted WAV from disk using soundfile...")
-            data, reloaded_sr = sf.read(wav_path, always_2d=True)
-            waveform = torch.from_numpy(data.T).float()
-            
-            if reloaded_sr != SAMPLE_RATE:
-                print(f"  ⚠️ WARNING: Sample rate is {reloaded_sr}Hz, expected {SAMPLE_RATE}Hz")
-                resampler = torchaudio.transforms.Resample(reloaded_sr, SAMPLE_RATE)
-                waveform = resampler(waveform)
-                reloaded_sr = SAMPLE_RATE
-            
-            print(f"  ✅ [RELOADED] Successfully loaded: {os.path.basename(wav_path)}")
-            print(f"  ✅ [VERIFIED] Sample rate: {reloaded_sr}Hz, Channels: {waveform.shape[0]}, Samples: {waveform.shape[1]}")
-            print(f"  ✅ [CONFIRMED] Analyzing clean PCM WAV from disk, NOT original {original_ext.upper()}")
-            
-            # STEP 3: Analyze the reloaded WAV file
-            analysis_ext = '.wav'
-            is_lossy_analysis = False
-            format_bias = FORMAT_LOGIT_BIAS.get('.wav', 0.0)
-            total_bias = LOGIT_BIAS + format_bias
-            eff_neural_w = NEURAL_WEIGHT_LOSSLESS
-            eff_acoustic_w = ACOUSTIC_WEIGHT_LOSSLESS
-            
-            print(f"\n  [analysis] Analyzing WAV file (lossless mode)")
-            print(f"  [analysis] Bias: {total_bias:+.2f}, Neural weight: {eff_neural_w:.0%}, Acoustic weight: {eff_acoustic_w:.0%}")
-
-            chunk, _ = prepare_full_audio(waveform)
-
-            if chunk.shape[1] < 16000:
-                raise ValueError("Audio too short (< 1 second).")
+            is_compressed, hf_ratio, codec_conf, codec_details = detect_codec_compression(chunk, SAMPLE_RATE)
+            if is_compressed:
+                print(f"  [codec] Compression detected — HF ratio={hf_ratio:.5f}  confidence={codec_conf:.2f}  details={codec_details}")
 
             with torch.no_grad():
-                mel = mel_from_chunk(chunk, is_lossy=is_lossy_analysis, ext=analysis_ext).to(device)
-                raw_logit = model(mel).squeeze().item()
-                clip_weight, clip_ratio = clipping_weight(chunk)
-                chunk_feat = compute_chunk_features(chunk)
+                raw_logit=model(mel_from_chunk(chunk).to(device)).squeeze().item()
+                _,clip_ratio=clipping_weight(chunk)
+                chunk_feat=compute_chunk_features(chunk)
 
-            cal_logit = (raw_logit + total_bias) / LOGIT_TEMPERATURE
-            cal_prob = torch.sigmoid(torch.tensor(cal_logit)).item()
-            neural_prob = cal_prob
+            neural_prob=torch.sigmoid(torch.tensor(raw_logit/LOGIT_TEMPERATURE)).item()
+            acoustic_prob=acoustic_composite_score(chunk_feat)/100.0
+            pro_bonus,pro_reasons=detect_professional_production(chunk_feat)
 
-            acoustic_score = acoustic_composite_score(chunk_feat)
-            acoustic_prob = acoustic_score / 100.0
+            if clip_ratio>0.01: neural_prob*=1.0-(min(clip_ratio,0.10)*0.5)
 
-            if clip_ratio > 0.01:
-                clip_damping = 1.0 - (min(clip_ratio, 0.10) * 0.5)
-                neural_prob = neural_prob * clip_damping
-                print(f"  clip_damping={clip_damping:.3f} (clip_ratio={clip_ratio:.4f})")
+            disagreement=abs(neural_prob-acoustic_prob)
+            penalty=min(disagreement/0.5,1.0)
+            eff_nw=NEURAL_WEIGHT-penalty*0.08; eff_aw=ACOUSTIC_WEIGHT+penalty*0.08
+            ai_probability=round(max(PROB_FLOOR,min(PROB_CEILING,(eff_nw*neural_prob+eff_aw*acoustic_prob)*pro_bonus))*100,1)
 
-            base_prob = eff_neural_w * neural_prob + eff_acoustic_w * acoustic_prob
-            comp_pen = compression_penalty(chunk_feat, is_lossy_analysis)
-            base_prob = base_prob * comp_pen
-            print(f"  compression_penalty={comp_pen:.3f}")
-
-            ensemble_prob = max(PROB_FLOOR, min(PROB_CEILING, base_prob))
-            ai_probability = round(ensemble_prob * 100, 1)
-
-            verdict, confidence, verdict_explanation = derive_verdict(ai_probability, is_lossy_analysis)
-
-            xai_feats = score_features_for_xai(
-                chunk_feat, neural_prob,
-                eff_neural_w, eff_acoustic_w,
-                final_ai_probability=ai_probability,
-                is_lossy=is_lossy_analysis
+            ai_probability, eff_nw, eff_aw, codec_penalty_info = apply_codec_penalty(
+                neural_prob, acoustic_prob, ai_probability, is_compressed, codec_conf
             )
 
-            display_filename = os.path.basename(wav_path)
-            
-            print(f"\n{'='*60}")
-            print(f"✓ ANALYZED: {display_filename} (converted from {original_ext})")
-            print(f"✓ AI Probability: {ai_probability}%")
-            print(f"✓ Verdict: {verdict}")
-            print(f"{'='*60}\n")
+            eff_threshold=AI_THRESHOLD+min(disagreement/0.5,1.0)*4
+            verdict,verdict_explanation=derive_verdict(ai_probability)
+            if disagreement>=0.4 and AI_THRESHOLD<=ai_probability<eff_threshold:
+                verdict="Not Sure"; verdict_explanation=f"Models disagree significantly ({ai_probability}%)"
+
+            print(f"  Neural={neural_prob:.1%}  Acoustic={acoustic_prob:.1%}  Score={ai_probability}%  Verdict={verdict}"
+                  + (f"  [codec-adj]" if is_compressed else ""))
+
+            genre_result=classify_genre(waveform) if GENRE_AVAILABLE else None
+            if genre_result and genre_result.get("top"):
+                ts=genre_result.get("top_subgenre")
+                sub_str = f" / {ts['label']}" if ts else ""
+                print(f"  [genre] {genre_result['top']['label']} ({genre_result['top']['score']}%){sub_str} — {genre_result.get('confidence_note','')}")
+
+            xai_feats=score_features_for_xai(chunk_feat,neural_prob,ai_probability)
+            gp={"available":GENRE_AVAILABLE,"primary_available":GENRE_PRIMARY_AVAILABLE,
+                "secondary_available":GENRE_SECONDARY_AVAILABLE,
+                **({k:genre_result.get(k) for k in ["top","all","top_subgenre","sources","window_count","stability","confidence_note","primary_used","secondary_used"]}
+                   if genre_result else {"top":None,"all":None,"top_subgenre":None,"sources":[],"window_count":0,"stability":0,"confidence_note":"","primary_used":False,"secondary_used":False}),
+                "subgenres":genre_result.get("subgenres",{}) if genre_result else {}}
 
             results.append({
-                'original_filename': filename,
-                'display_filename': display_filename,
-                'analyzed_file': display_filename,
-                'original_format': original_ext.upper().replace('.', ''),
-                'analyzed_format': 'WAV (16kHz)',
-                'conversion_note': f'Converted from {original_ext.upper()} to 16kHz WAV · analyzed as clean PCM',
-                'converted_wav_path': f'/converted_wavs/{display_filename}' if SAVE_CONVERTED_WAV else None,
-                'ai_probability': ai_probability,
-                'verdict': verdict,
-                'confidence': confidence,
-                'verdict_explanation': verdict_explanation,
-                'duration_sec': round(total_secs, 2),
-                'xai': xai_feats,
-                'score_breakdown': {
-                    'neural_contribution': round(eff_neural_w * neural_prob * 100, 1),
-                    'acoustic_contribution': round(eff_acoustic_w * acoustic_prob * 100, 1),
-                    'neural_weight_pct': round(eff_neural_w * 100),
-                    'acoustic_weight_pct': round(eff_acoustic_w * 100),
+                "original_filename":filename,"display_filename":os.path.basename(wav_path),
+                "original_format":ext.upper().replace(".",""),"analyzed_format":"WAV (16kHz)",
+                "conversion_note":f"Converted from {ext.upper()} to 16kHz WAV",
+                "converted_wav_path":f"/converted_wavs/{os.path.basename(wav_path)}" if SAVE_CONVERTED_WAV else None,
+                "ai_probability":ai_probability,"verdict":verdict,"verdict_explanation":verdict_explanation,
+                "duration_sec":round(total_secs,2),"xai":xai_feats,"genre":gp,
+                "score_breakdown":{
+                    "neural_contribution":round(eff_nw*neural_prob*100,1),
+                    "acoustic_contribution":round(eff_aw*acoustic_prob*100,1),
+                    "neural_weight_pct":round(eff_nw*100),"acoustic_weight_pct":round(eff_aw*100),
+                    "disagreement":round(disagreement,3),"professional_bonus":round(pro_bonus,3),
+                    "professional_reasons":pro_reasons,
+                    "codec_compression": {
+                        "detected":       is_compressed,
+                        "hf_ratio":       round(hf_ratio, 5),
+                        "confidence":     round(codec_conf, 3),
+                        "details":        codec_details,
+                        **codec_penalty_info,
+                    },
                 },
-                'diagnostics': {
-                    'analysis_source': wav_path,
-                    'converted_from': original_ext,
-                    'sample_rate': reloaded_sr,
-                    'neural_prob': round(neural_prob, 4),
-                    'acoustic_prob': round(acoustic_prob, 4),
-                    'base_prob': round(base_prob, 4),
-                    'final_prob': ensemble_prob,
-                    'compression_penalty': round(comp_pen, 4),
-                    'clip_ratio': round(clip_ratio, 4),
-                }
+                "diagnostics":{"analysis_source":wav_path,"converted_from":ext,"sample_rate":sr,
+                               "neural_prob":round(neural_prob,4),"acoustic_prob":round(acoustic_prob,4)},
             })
-
         except Exception as e:
-            import traceback
-            traceback.print_exc()
-            results.append({'filename': filename, 'error': str(e)})
+            import traceback; traceback.print_exc()
+            results.append({"filename":filename,"error":str(e)})
         finally:
-            if os.path.exists(tmp_path):
-                os.unlink(tmp_path)
+            if os.path.exists(tmp_path): os.unlink(tmp_path)
+    return jsonify({"results":results})
 
-    return jsonify({'results': results})
-
-
-if __name__ == '__main__':
-    print("\n" + "="*60)
-    print("[*] Starting SoundScan at http://localhost:5000")
-    print("[*] ✅ VERSION: FIXED XAI SCORING + CLIPPING WEIGHT FIX")
-    print(f"[*] Converted WAV files will be saved to: {CONVERTED_WAV_DIR}/")
-    print("[*] All audio is converted to 16kHz PCM WAV using ffmpeg")
-    print("[*] ✅ Acoustic features now have realistic scoring (15-60% range)")
-    print("[*] ✅ Static features correctly attributed to mastering, not AI")
-    print("[*] 🔍 Debug endpoint: http://localhost:5000/debug/last_analysis")
-    print("="*60 + "\n")
-    app.run(host='0.0.0.0', port=5000, debug=False)
+if __name__=="__main__":
+    print(f"\n{'='*60}\n[*] SoundScan — http://localhost:5000")
+    print(f"[*] AI threshold: {AI_THRESHOLD}%  Neural/Acoustic: {round(NEURAL_WEIGHT*100)}/{round(ACOUSTIC_WEIGHT*100)}")
+    print(f"[*] Codec penalty: HF threshold={CODEC_HF_RATIO_THRESHOLD}  neural_penalty={CODEC_NEURAL_PENALTY}  score_discount={CODEC_SCORE_DISCOUNT}")
+    print(f"[*] Genre: primary={'ON' if GENRE_PRIMARY_AVAILABLE else 'OFF'} secondary={'ON' if GENRE_SECONDARY_AVAILABLE else 'OFF'}  windows={GENRE_N_WINDOWS}")
+    print(f"[*] Reports saved to: {REPORTS_FILE}")
+    print(f"{'='*60}\n")
+    app.run(host="0.0.0.0",port=5000,debug=False)

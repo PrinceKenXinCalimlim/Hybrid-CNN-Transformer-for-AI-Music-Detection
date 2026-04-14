@@ -4,7 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>SoundScan · AI Music Detection</title>
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet"/>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 :root{
@@ -13,6 +13,7 @@
   --txt:#0f1a14;--mut:#6b7e75;--faint:#a8b4ae;
   --brd:#e3ebe7;--page:#f0f3f1;--card:#fff;
   --mono:'JetBrains Mono',monospace;
+  --num:'Plus Jakarta Sans',sans-serif;
 }
 body{font-family:'DM Sans',sans-serif;background:var(--page);color:var(--txt);display:flex;min-height:100vh;overflow:hidden;}
 /* ── PAGE SWITCHING ───────────────────────────────────────── */
@@ -21,225 +22,228 @@ body{font-family:'DM Sans',sans-serif;background:var(--page);color:var(--txt);di
 
 /* ── LANDING PAGE ─────────────────────────────────────────── */
 #page-landing{
-  background:var(--gbg);
+  background:linear-gradient(155deg,#0e7a52 0%,#16a06b 45%,#0a5e3f 100%);
   flex-direction:column;
   justify-content:center;
   align-items:center;
   text-align:center;
-  padding:72px 52px;
+  padding:60px 48px;
   position:relative;
   overflow:hidden;
+  gap:0;
+}
+/* subtle radial glow behind content */
+#page-landing::before{
+  content:'';
+  position:absolute;
+  top:30%;left:50%;
+  transform:translate(-50%,-50%);
+  width:700px;height:500px;
+  background:radial-gradient(ellipse,rgba(255,255,255,0.07) 0%,transparent 70%);
+  pointer-events:none;
+  z-index:0;
 }
 .wc{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;}
-.hero-ico{width:54px;height:54px;background:rgba(255,255,255,0.15);
-  border:1.5px solid rgba(255,255,255,0.26);border-radius:15px;
+
+/* icon badge */
+.hero-ico{
+  width:68px;height:68px;
+  background:rgba(255,255,255,0.18);
+  border:2px solid rgba(255,255,255,0.35);
+  border-radius:20px;
   display:flex;align-items:center;justify-content:center;
-  margin-bottom:26px;position:relative;z-index:1;}
-#page-landing h1{font-family:'Syne',sans-serif;font-size:clamp(28px,3.6vw,50px);
-  font-weight:800;color:#fff;letter-spacing:-0.03em;line-height:1.06;
-  margin-bottom:16px;position:relative;z-index:1;}
-#page-landing p{font-size:14px;color:rgba(255,255,255,0.72);line-height:1.75;
-  max-width:350px;margin:0 auto 28px;z-index:1;position:relative;font-weight:300;}
-.fmt-badge{display:inline-flex;flex-direction:column;
-  background:rgba(255,255,255,0.11);border:1px solid rgba(255,255,255,0.19);
-  border-radius:99px;padding:8px 20px;position:relative;z-index:1;margin:0 auto;}
-.fmt-lbl{font-size:8px;font-weight:500;opacity:0.6;letter-spacing:0.12em;
-  text-transform:uppercase;margin-bottom:2px;color:#fff;}
-.fmt-val{font-size:12px;font-weight:500;color:#fff;letter-spacing:0.04em;}
-.btn-start{display:block;margin:26px auto 0;background:#fff;color:var(--gd);
-  border:none;border-radius:99px;padding:13px 40px;font-family:'Syne',sans-serif;
-  font-size:14px;font-weight:700;cursor:pointer;z-index:1;position:relative;
-  transition:transform 0.15s,box-shadow 0.15s;box-shadow:0 4px 22px rgba(0,0,0,0.14);}
-.btn-start:hover{transform:translateY(-2px);box-shadow:0 8px 30px rgba(0,0,0,0.18);}
-.fair-notice{
-  display:inline-flex;align-items:center;gap:8px;
-  background:rgba(255,255,255,0.10);border:1px solid rgba(255,255,255,0.20);
-  border-radius:10px;padding:9px 14px;margin:16px auto 0;
-  position:relative;z-index:1;max-width:380px;
+  margin-bottom:28px;
+  position:relative;z-index:1;
+  box-shadow:0 8px 32px rgba(0,0,0,0.18);
 }
-.fair-dot{width:7px;height:7px;border-radius:50%;background:#7ee8a2;flex-shrink:0;}
-.fair-txt{font-size:11px;color:rgba(255,255,255,0.80);line-height:1.5;font-weight:400;}
-.fair-txt strong{color:#fff;font-weight:600;}
+
+/* headline */
+#page-landing h1{
+  font-family:'Syne',sans-serif;
+  font-size:clamp(36px,4.5vw,64px);
+  font-weight:800;
+  color:#fff;
+  letter-spacing:-0.04em;
+  line-height:1.0;
+  margin-bottom:20px;
+  position:relative;z-index:1;
+  text-shadow:0 2px 20px rgba(0,0,0,0.2);
+}
+
+/* subtitle */
+#page-landing p{
+  font-size:16px;
+  color:rgba(255,255,255,0.92);
+  line-height:1.75;
+  max-width:420px;
+  margin:0 auto 32px;
+  z-index:1;
+  position:relative;
+  font-weight:400;
+  text-shadow:0 1px 6px rgba(0,0,0,0.15);
+}
+
+/* format badge */
+.fmt-badge{
+  display:inline-flex;flex-direction:column;
+  background:rgba(255,255,255,0.14);
+  border:1.5px solid rgba(255,255,255,0.30);
+  border-radius:99px;
+  padding:10px 24px;
+  position:relative;z-index:1;
+  margin:0 auto;
+  backdrop-filter:blur(6px);
+}
+.fmt-lbl{
+  font-size:9px;font-weight:600;
+  opacity:1;letter-spacing:0.14em;
+  text-transform:uppercase;margin-bottom:3px;
+  color:rgba(255,255,255,0.75);
+}
+.fmt-val{
+  font-size:13px;font-weight:600;
+  color:#fff;letter-spacing:0.05em;
+}
+
+/* CTA button */
+.btn-start{
+  display:block;margin:28px auto 0;
+  background:#fff;color:var(--gd);
+  border:none;border-radius:99px;
+  padding:15px 52px;
+  font-family:'Inter',sans-seri;
+  font-size:15px;font-weight:800;
+  cursor:pointer;z-index:1;position:relative;
+  transition:transform 0.18s,box-shadow 0.18s,background 0.18s;
+  box-shadow:0 6px 28px rgba(0,0,0,0.22);
+  letter-spacing:-0.01em;
+}
+.btn-start:hover{
+  transform:translateY(-3px);
+  box-shadow:0 12px 36px rgba(0,0,0,0.28);
+  background:#f0fdf4;
+}
+
+/* fair-use notice */
+.fair-notice{
+  display:inline-flex;align-items:flex-start;gap:10px;
+  background:rgba(0,0,0,0.18);
+  border:1.5px solid rgba(255,255,255,0.22);
+  border-radius:14px;
+  padding:12px 18px;
+  margin:20px auto 0;
+  position:relative;z-index:1;
+  max-width:440px;
+  backdrop-filter:blur(8px);
+}
+.fair-dot{
+  width:8px;height:8px;
+  border-radius:50%;
+  background:#7ee8a2;
+  flex-shrink:0;
+  margin-top:3px;
+  box-shadow:0 0 8px rgba(126,232,162,0.6);
+}
+.fair-txt{
+  font-size:13px;
+  color:rgba(255,255,255,0.95);
+  line-height:1.6;
+  font-weight:400;
+  text-align:left;
+}
+.fair-txt strong{color:#fff;font-weight:700;}
 
 /* ── UPLOAD PAGE ──────────────────────────────────────────── */
 #page-upload{
   flex-direction:column;
   background:var(--page);
 }
-
-/* HERO BANNER */
 .hero{
-  flex:none;
-  width:100%;
-  background:var(--gbg);
-  position:relative;
-  overflow:hidden;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  padding:32px 20px;
-  border-bottom:1px solid rgba(0,0,0,0.05);
-  z-index:10;
+  flex:none;width:100%;background:var(--gbg);position:relative;overflow:hidden;
+  display:flex;align-items:center;justify-content:center;
+  padding:32px 20px;border-bottom:1px solid rgba(0,0,0,0.05);z-index:10;
 }
 .hero-title-row{
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  gap:14px;
-  position:relative;
-  z-index:1;
+  display:flex;align-items:center;justify-content:center;
+  gap:14px;position:relative;z-index:1;
 }
 .hero h1{
-  font-family:'Syne',sans-serif;
-  font-size:clamp(20px,2.2vw,34px);
-  font-weight:800;color:#fff;
-  letter-spacing:-0.03em;
-  line-height:1.1;margin:0;
+  font-family:'Syne',sans-serif;font-size:clamp(20px,2.2vw,34px);
+  font-weight:800;color:#fff;letter-spacing:-0.03em;line-height:1.1;margin:0;
 }
-
-/* BACK BUTTON */
 .btn-back{
   position:absolute;top:24px;left:24px;
   display:inline-flex;align-items:center;gap:6px;
-  background:rgba(255,255,255,0);border:none;
-  background:#000;           
-  color:#fff;   
-  color:rgba(255,255,255,0.75);font-size:13px;
-  cursor:pointer;z-index:20;padding:8px 12px;
-  border-radius:10px;transition:background 0.15s,color 0.15s;
+  background:#000;color:#fff;
+  font-size:13px;cursor:pointer;z-index:20;padding:8px 12px;
+  border:none;border-radius:10px;transition:background 0.15s,color 0.15s;
   font-family:'DM Sans',sans-serif;
 }
-.btn-back:hover{color:#fff;}
+.btn-back:hover{background:#222;color:#fff;}
 .btn-back svg{width:15px;height:15px;}
-
-/* CONTENT ROW: upload left + results right */
-.content-row{
-  display:flex;
-  flex:1;
-  min-height:0;
-  overflow:hidden;
-}
-
-/* LEFT: Upload panel */
+.content-row{display:flex;flex:1;min-height:0;overflow:hidden;}
 .rp{
-  width:420px;
-  flex-shrink:0;
-  padding:40px 32px;
-  display:flex;
-  flex-direction:column;
-  gap:16px;
-  overflow-y:auto;
-  border-right:1px solid var(--brd);
+  width:420px;flex-shrink:0;padding:40px 32px;
+  display:flex;flex-direction:column;gap:16px;
+  overflow-y:auto;border-right:1px solid var(--brd);
 }
-.pt{font-family:'Syne',sans-serif;font-size:19px;font-weight:700;
-  letter-spacing:-0.02em;margin-bottom:2px;}
+.pt{font-family:'Syne',sans-serif;font-size:19px;font-weight:700;letter-spacing:-0.02em;margin-bottom:2px;}
 .ps{font-size:12.5px;color:var(--mut);margin-bottom:4px;}
 
 /* RIGHT: Results panel */
 #rl-wrapper{
-  flex:1;
-  overflow:hidden;
-  padding:32px 40px;
-  display:none;
-  background:var(--page);
-  gap:24px;
-  min-width:0;
-  width:100%;
+  flex:1;overflow:hidden;padding:32px 40px;
+  display:none;background:var(--page);gap:24px;min-width:0;width:100%;
 }
 #rl-wrapper.visible{
-  display:flex;
-  flex-direction:row;
-  gap:24px;
-  align-items:flex-start;
-  height:calc(100vh - 160px);
+  display:flex;flex-direction:row;gap:24px;align-items:flex-start;
 }
 #rl-title{
-  font-family:'Syne',sans-serif;
-  font-size:19px;font-weight:700;
-  letter-spacing:-0.02em;
-  margin-bottom:16px;
+  font-family:'Syne',sans-serif;font-size:19px;font-weight:700;
+  letter-spacing:-0.02em;margin-bottom:16px;
 }
-
-/* Panel 1: Analysis Results */
-#results-panel{
-  flex:1;
-  display:flex;
-  flex-direction:column;
-  gap:16px;
-}
-#results-panel .vc{
-  display:flex;
-  flex-direction:column;
-}
-#rl{
-  display:flex;
-  flex-direction:column;
-  gap:16px;
-}
-
+#results-panel{flex:1;display:flex;flex-direction:column;overflow:hidden;}
 #rl-and-acoustic{
-  display:flex;
-  flex-direction:row;
-  gap:24px;
-  align-items:flex-start;
-  width:100%;
-  min-width:0;
-  overflow:hidden;
-}
-#rl{
-  width:340px;
-  flex-shrink:0;
-  display:flex;
-  flex-direction:column;
-  gap:16px;
-  min-width:0;
+  display:flex;flex-direction:row;gap:24px;
+  align-items:flex-start;width:100%;min-width:0;overflow:hidden;
+  flex:1;min-height:0;
 }
 
-/* Panel 2: Acoustic Signal Breakdown */
+/* Scrollable results list */
+#rl{
+  width:340px;flex-shrink:0;display:flex;
+  flex-direction:column;gap:16px;min-width:0;
+}
+
 #acoustic-panel{
-  flex:1;
-  min-width:0;
-  max-width:calc(100% - 364px);
-  background:var(--card);
-  border-radius:18px;
-  border:1px solid var(--brd);
-  box-shadow:0 2px 16px rgba(0,0,0,0.07);
-  overflow:hidden;
-  display:none;
-  flex-direction:column;
-  align-self:stretch;
+  flex:1;min-width:0;max-width:calc(100% - 364px);
+  background:var(--card);border-radius:18px;border:1px solid var(--brd);
+  box-shadow:0 2px 16px rgba(0,0,0,0.07);overflow:hidden;
+  display:none;flex-direction:column;align-self:stretch;
 }
 #acoustic-panel.visible{display:flex;}
 #acoustic-content{
-  padding:12px 16px 16px;
-  display:flex;
-  flex-direction:column;
-  gap:8px;
-  overflow-y:scroll;
-  overflow-x:hidden;
-  flex:1;
-  min-height:0;
+  padding:12px 16px 16px;display:flex;flex-direction:column;gap:8px;
+  overflow-y:scroll;overflow-x:hidden;flex:1;min-height:0;
   max-height:calc(100vh - 260px);
+  scrollbar-width:thin;
+  scrollbar-color:var(--brd) transparent;
 }
+#acoustic-content::-webkit-scrollbar{width:5px;}
+#acoustic-content::-webkit-scrollbar-track{background:transparent;}
+#acoustic-content::-webkit-scrollbar-thumb{background:var(--brd);border-radius:99px;}
+#acoustic-content::-webkit-scrollbar-thumb:hover{background:#c8d4ce;}
 .acoustic-header{
-  padding:14px 18px;
-  border-bottom:1px solid var(--brd);
-  display:flex;
-  align-items:center;
-  gap:8px;
+  padding:14px 18px;border-bottom:1px solid var(--brd);
+  display:flex;align-items:center;gap:8px;flex-shrink:0;
 }
 .acoustic-header-pill{
-  font-size:8px;font-weight:700;
-  letter-spacing:0.1em;
-  background:var(--txt);color:#fff;
-  border-radius:4px;padding:3px 8px;
-  text-transform:uppercase;
+  font-size:8px;font-weight:700;letter-spacing:0.1em;
+  background:var(--txt);color:#fff;border-radius:4px;
+  padding:3px 8px;text-transform:uppercase;
 }
 .acoustic-header-title{font-size:13px;font-weight:700;}
 .acoustic-header-count{font-size:10.5px;color:var(--mut);margin-left:auto;}
-#acoustic-content{padding:12px 16px 16px;display:flex;flex-direction:column;gap:8px;}
-
-#rl{display:flex;flex-direction:column;gap:16px;}
 
 /* ── UPLOAD CARD ──────────────────────────────────────────── */
 .uc{background:var(--card);border-radius:18px;padding:20px 18px 16px;
@@ -276,8 +280,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--page);color:var(--txt);di
 .btn-a:active:not(:disabled){transform:scale(0.98);}
 .btn-a:disabled{background:#d3d8d5;color:#9ca8a3;cursor:not-allowed;}
 .btn-cl{background:transparent;border:1.5px solid var(--brd);border-radius:11px;
-  color:var(--mut);font-family:'DM Sans',sans-serif;font-size:12.5px;font-weight:500;
-  padding:12px 13px;cursor:pointer;transition:border-color 0.17s,color 0.17s;white-space:nowrap; color: #000;}
+  color:#000;font-family:'DM Sans',sans-serif;font-size:12.5px;font-weight:500;
+  padding:12px 13px;cursor:pointer;transition:border-color 0.17s,color 0.17s;white-space:nowrap;}
 .btn-cl:hover{border-color:var(--red);color:var(--red);}
 .sb{display:none;align-items:center;gap:9px;background:var(--card);border-radius:11px;
   padding:11px 14px;font-size:12.5px;color:var(--mut);border:1px solid var(--brd);}
@@ -295,43 +299,57 @@ body{font-family:'DM Sans',sans-serif;background:var(--page);color:var(--txt);di
   animation:fu 0.4s cubic-bezier(0.22,1,0.36,1) both;}
 @keyframes fu{from{opacity:0;transform:translateY(13px);}to{opacity:1;transform:translateY(0);}}
 .vc-stripe{height:3px;}
-.vc-fname-row{
-  padding:14px 18px 10px;
-  border-bottom:none;
-}
+.vc-fname-row{padding:14px 18px 10px;border-bottom:none;}
 .vc-fname-full{
-  font-size:12px;
-  font-weight:700;
-  color:var(--txt);
-  font-family:'DM Sans',sans-serif;
-  word-break:break-word;
-  line-height:1.4;
-  display:block;
+  font-size:12px;font-weight:700;color:var(--txt);
+  font-family:'DM Sans',sans-serif;word-break:break-word;
+  line-height:1.4;display:block;margin-bottom:8px;
 }
 .vc-topbar{
-  display:flex;
-  align-items:center;
-  gap:6px;
-  padding:0 18px 14px;
-  border-bottom:1px solid var(--brd);
-  min-width:0;
-  flex-wrap:wrap;
+  display:flex;align-items:center;gap:6px;
+  padding:0 18px 14px;border-bottom:1px solid var(--brd);
+  min-width:0;flex-wrap:wrap;
 }
 .vc-fname{font-size:9.5px;font-family:var(--mono);color:var(--mut);text-transform:uppercase;letter-spacing:0.05em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0;}
-.conf-tag{font-size:9px;font-weight:600;font-family:var(--mono);letter-spacing:0.04em;color:var(--faint);white-space:nowrap;flex-shrink:0;}
-.vchip{display:inline-flex;align-items:center;gap:4px;border-radius:6px;padding:4px 9px;font-size:10px;font-weight:700;white-space:nowrap;flex-shrink:0;}
-.vchip-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0;}
+.conf-tag{
+  font-size:11px;font-weight:600;font-family:var(--mono);
+  letter-spacing:0.03em;color:var(--mut);
+  white-space:nowrap;flex-shrink:0;
+}
+.vchip{
+  display:inline-flex;align-items:center;gap:5px;
+  border-radius:8px;padding:5px 10px;
+  font-size:11px;font-weight:700;
+  white-space:nowrap;flex-shrink:0;
+}.vchip-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0;}
 .ch-ai{background:#fef2f2;color:#b91c1c;}
 .ch-mid{background:#fffbeb;color:#92400e;}
 .ch-hum{background:#f0fdf4;color:#14532d;}
-.fmt-tag{font-size:8px;font-weight:700;font-family:var(--mono);letter-spacing:0.06em;background:#f0f3f1;color:var(--mut);border-radius:4px;padding:3px 6px;text-transform:uppercase;flex-shrink:0;border:1px solid var(--brd);}
-.conversion-badge{font-size:7px;font-weight:600;font-family:var(--mono);background:rgba(23,168,112,0.12);color:var(--g);border-radius:4px;padding:3px 6px;text-transform:uppercase;flex-shrink:0;border:1px solid rgba(23,168,112,0.2);}
-.download-badge{font-size:7px;font-weight:600;font-family:var(--mono);background:rgba(23,168,112,0.08);color:var(--g);border-radius:4px;padding:3px 6px;text-transform:uppercase;flex-shrink:0;border:1px solid rgba(23,168,112,0.15);text-decoration:none;transition:all 0.13s;}
-.download-badge:hover{background:rgba(23,168,112,0.2);transform:translateY(-1px);}
-.vc-score{display:flex;align-items:flex-start;gap:16px;padding:20px 20px 18px;}
+.fmt-tag{
+  font-size:10px;font-weight:700;font-family:var(--mono);
+  letter-spacing:0.04em;background:#f0f3f1;color:#4a5c55;
+  border-radius:6px;padding:4px 9px;text-transform:uppercase;
+  flex-shrink:0;border:1px solid var(--brd);
+}
+.conversion-badge{
+  font-size:10px;font-weight:600;font-family:var(--mono);
+  background:rgba(23,168,112,0.12);color:var(--gd);
+  border-radius:6px;padding:4px 9px;text-transform:uppercase;
+  flex-shrink:0;border:1px solid rgba(23,168,112,0.25);
+}
+.btn-report{
+  display:inline-flex;align-items:center;gap:5px;
+  background:none;border:1px solid var(--brd);border-radius:8px;
+  padding:5px 10px;font-size:11px;font-weight:600;
+  color:var(--mut);cursor:pointer;font-family:'DM Sans',sans-serif;
+  transition:border-color 0.14s,color 0.14s,background 0.14s;
+  white-space:nowrap;flex-shrink:0;
+}
+.btn-report:hover{border-color:#f59e0b;color:#92400e;background:#fffbeb;}
+.btn-report.reported{border-color:rgba(23,168,112,0.3);color:var(--g);background:rgba(23,168,112,0.06);cursor:default;}.vc-score{display:flex;align-items:flex-start;gap:16px;padding:20px 20px 18px;}
 .gw{flex-shrink:0;width:78px;text-align:center;padding-top:2px;}
 .gw svg{display:block;margin:0 auto;}
-.gnum{font-family:'Syne',sans-serif;font-size:15px;font-weight:800;line-height:1;margin-top:1px;}
+.gnum{font-family:var(--num);font-size:16px;font-weight:800;line-height:1;margin-top:2px;letter-spacing:-0.02em;}
 .glbl{font-size:8px;color:var(--faint);letter-spacing:0.06em;text-transform:uppercase;margin-top:1px;font-family:var(--mono);}
 .sr{flex:1;min-width:0;}
 .sr-title{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;letter-spacing:-0.01em;line-height:1.3;margin-bottom:3px;}
@@ -339,27 +357,188 @@ body{font-family:'DM Sans',sans-serif;background:var(--page);color:var(--txt);di
 .cr-lbl{display:flex;justify-content:space-between;font-size:9px;color:var(--faint);margin-bottom:4px;font-family:var(--mono);}
 .cr-rail{height:6px;border-radius:99px;background:linear-gradient(to right,#22c55e,#f59e0b,#ef4444);position:relative;}
 .cr-thumb{position:absolute;top:50%;transform:translate(-50%,-50%);width:12px;height:12px;background:#fff;border:2.5px solid #111;border-radius:50%;transition:left 1.1s cubic-bezier(0.22,1,0.36,1);box-shadow:0 1px 4px rgba(0,0,0,0.18);left:0%;}
-.cr-pct{text-align:right;font-family:'Syne',sans-serif;font-size:10px;font-weight:700;margin-top:4px;}
+.cr-pct{text-align:right;font-family:var(--num);font-size:11px;font-weight:700;margin-top:5px;letter-spacing:-0.01em;}
 .div{height:1px;background:var(--brd);}
-.blend-row{padding:16px 20px 18px;display:flex;flex-direction:column;gap:5px;}
-.blend-lbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--mut);font-family:var(--mono);margin-bottom:2px;}
-.blend-bar-wrap{display:flex;height:8px;border-radius:99px;overflow:hidden;gap:1px;}
-.blend-seg-n{background:#17a870;border-radius:99px 0 0 99px;transition:width 1s cubic-bezier(0.22,1,0.36,1);}
-.blend-seg-a{background:#a8b4ae;border-radius:0 99px 99px 0;transition:width 1s cubic-bezier(0.22,1,0.36,1);}
-.blend-meta{display:flex;justify-content:space-between;font-size:9px;font-family:var(--mono);color:var(--faint);}
-.blend-meta span{display:flex;align-items:center;gap:4px;}
-.blend-dot{width:6px;height:6px;border-radius:50%;display:inline-block;}
-.file-info{padding:16px 20px 18px;display:flex;flex-wrap:wrap;gap:10px;}
-.info-item{font-size:9px;color:var(--mut);font-family:var(--mono);display:flex;flex-direction:column;}
-.info-val{font-family:'Syne',sans-serif;font-size:12px;font-weight:700;color:var(--txt);}
-.info-lbl{font-size:8px;text-transform:uppercase;letter-spacing:0.05em;margin-top:2px;}
+.blend-row{
+  padding:16px 18px 18px;
+  display:flex;flex-direction:column;gap:8px;
+  background:rgba(0,0,0,0.01);
+}
+.blend-lbl{
+  font-size:10px;font-weight:700;text-transform:uppercase;
+  letter-spacing:0.07em;color:var(--txt);
+  font-family:var(--mono);
+}
+.blend-explain{
+  font-size:11px;color:var(--mut);line-height:1.6;
+}
+.blend-bar-wrap{
+  display:flex;height:10px;border-radius:99px;
+  overflow:hidden;gap:2px;margin:2px 0;
+}
+.blend-seg-n{
+  background:var(--g);border-radius:99px 0 0 99px;
+  transition:width 1s cubic-bezier(0.22,1,0.36,1);
+}
+.blend-seg-a{
+  background:#a8b4ae;border-radius:0 99px 99px 0;
+  transition:width 1s cubic-bezier(0.22,1,0.36,1);
+}
+.blend-meta{
+  display:flex;justify-content:space-between;
+  gap:10px;margin-top:2px;
+}
+.blend-col{display:flex;flex-direction:column;gap:3px;}
+.blend-col-right{text-align:right;align-items:flex-end;}
+.blend-key{
+  display:flex;align-items:center;gap:6px;
+  font-size:12px;font-weight:600;color:var(--txt);
+}
+.blend-key-right{justify-content:flex-end;}
+.blend-dot{
+  width:8px;height:8px;border-radius:50%;
+  display:inline-block;flex-shrink:0;
+}
+.blend-weight{
+  font-size:10px;color:var(--mut);
+  font-family:var(--mono);line-height:1.5;
+}
+.blend-pts{
+  font-size:13px;font-weight:800;
+  font-family:var(--num);letter-spacing:-0.02em;
+}
+.file-info{
+  padding:16px 18px 18px;
+  display:flex;flex-wrap:wrap;gap:20px;
+}
+.info-item{
+  font-size:10px;color:var(--mut);
+  font-family:var(--mono);
+  display:flex;flex-direction:column;gap:2px;
+}
+.info-val{
+  font-family:var(--num);font-size:15px;
+  font-weight:800;color:var(--txt);
+  letter-spacing:-0.02em;
+}
+.info-lbl{
+  font-size:9px;text-transform:uppercase;
+  letter-spacing:0.07em;color:var(--faint);
+  margin-top:1px;
+}
 .conversion-note{padding:8px 16px 4px;font-size:9px;color:var(--g);font-family:var(--mono);background:rgba(23,168,112,0.05);border-bottom:1px solid var(--brd);}
 .conversion-note span{display:flex;align-items:center;gap:6px;}
-.xai{padding:12px 16px 16px;}
-.xai-hd{display:flex;align-items:center;gap:7px;margin-bottom:13px;}
-.xai-pill{font-size:8px;font-weight:700;letter-spacing:0.1em;background:var(--txt);color:#fff;border-radius:4px;padding:3px 8px;text-transform:uppercase;flex-shrink:0;}
-.xai-ttl{font-size:12px;font-weight:700;}
-.xai-sub{font-size:10.5px;color:var(--mut);margin-left:auto;}
+
+/* ── GENRE ────────────────────────────────────────────────── */
+.genre-card{
+  padding:16px 18px 18px;
+  border-bottom:1px solid var(--brd);
+  background:rgba(23,168,112,0.02);
+}
+.genre-header{
+  display:flex;align-items:center;gap:10px;
+  margin-bottom:12px;flex-wrap:wrap;
+}
+.genre-pill{
+  font-size:9px;font-weight:700;letter-spacing:0.08em;
+  background:var(--g);color:#fff;
+  border-radius:6px;padding:4px 10px;
+  text-transform:uppercase;flex-shrink:0;
+}
+.genre-title-row{
+  display:flex;align-items:center;gap:8px;flex:1;flex-wrap:wrap;
+}
+.genre-main-name{
+  font-family:'Inter',sans-serif;font-size:15px;font-weight:800;
+  color:var(--txt);letter-spacing:-0.02em;
+}
+.genre-conf-note{
+  font-size:11px;color:var(--mut);
+  font-style:italic;margin-left:auto;
+}
+.genre-top-chip{
+  display:inline-flex;align-items:center;gap:5px;
+  border-radius:8px;padding:5px 11px;
+  font-size:12px;font-weight:700;
+  background:rgba(23,168,112,0.12);color:var(--gd);
+  border:1px solid rgba(23,168,112,0.25);
+}
+.genre-top-pct{
+  font-family:var(--num);font-size:11px;
+  font-weight:700;opacity:0.8;
+}
+.genre-sub-chip{
+  display:inline-flex;align-items:center;gap:4px;
+  border-radius:6px;padding:4px 10px;
+  font-size:11px;font-weight:600;
+  background:rgba(23,168,112,0.06);color:var(--mut);
+  border:1px solid var(--brd);
+}
+.genre-sub-chip strong{color:var(--txt);}
+.genre-bars{
+  display:flex;flex-direction:column;gap:8px;margin-top:10px;
+}
+.genre-row{display:flex;align-items:center;gap:10px;}
+.genre-row-label{
+  font-size:12px;font-weight:500;color:var(--txt);
+  min-width:100px;max-width:130px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.genre-row-bar-wrap{
+  flex:1;height:6px;background:#e3ebe7;
+  border-radius:99px;overflow:hidden;
+}
+.genre-row-bar{
+  height:100%;border-radius:99px;width:0%;
+  transition:width 1.2s cubic-bezier(0.22,1,0.36,1);
+}
+.genre-row-pct{
+  font-size:12px;font-family:var(--num);
+  font-weight:700;color:var(--mut);
+  min-width:38px;text-align:right;
+  letter-spacing:-0.01em;
+}
+.genre-row.top .genre-row-label{font-weight:700;color:var(--gd);}
+.genre-row.top .genre-row-pct{color:var(--gd);}
+.genre-row.top .genre-row-bar{background:var(--g);}
+.genre-row:not(.top) .genre-row-bar{background:#b4c5bc;}
+.genre-subgenres{
+  display:flex;flex-wrap:wrap;gap:5px;
+  margin-top:6px;padding-left:2px;
+}
+.genre-sub-tag{
+  font-size:10px;color:var(--mut);
+  background:#f0f4f2;border:1px solid var(--brd);
+  border-radius:5px;padding:3px 8px;font-family:var(--mono);
+}
+.genre-sub-tag.top-sub{
+  color:var(--gd);background:rgba(23,168,112,0.08);
+  border-color:rgba(23,168,112,0.22);font-weight:600;
+}
+.genre-meta{
+  display:flex;flex-wrap:wrap;gap:10px;
+  margin-top:12px;padding-top:10px;border-top:1px solid var(--brd);
+}
+.genre-meta-item{
+  font-size:10px;color:var(--mut);
+  font-family:var(--mono);
+  display:flex;align-items:center;gap:5px;
+}
+.genre-meta-item strong{color:var(--txt);font-weight:600;}
+.stability-pips{display:flex;gap:3px;}
+.stability-pip{width:12px;height:6px;border-radius:3px;background:#e3ebe7;}
+.stability-pip.on{background:var(--g);}
+
+/* ── XAI / ACOUSTIC FEATURE CARDS ───────────────────────── */
+/* Badge colour classes (from file 2) */
+.fch-hi{background:#fef2f2;color:#b91c1c;}
+.fch-md{background:#fffbeb;color:#92400e;}
+.fch-lo{background:#f0fdf4;color:#14532d;}
+/* Bar fill colour classes (from file 2) */
+.bar-ai{background:#ef4444;}
+.bar-neutral{background:#f59e0b;}
+.bar-human{background:#22c55e;}
+
 .fc{border:1px solid var(--brd);border-radius:11px;padding:11px 13px;margin-bottom:7px;transition:border-color 0.14s,background 0.14s;}
 .fc:last-child{margin-bottom:0;}
 .fc:hover{border-color:#c5d4cc;}
@@ -368,10 +547,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--page);color:var(--txt);di
 .fc-top{display:flex;align-items:center;gap:8px;margin-bottom:7px;flex-wrap:wrap;}
 .fc-name{font-size:11.5px;font-weight:700;flex:1;}
 .fc-chip{font-size:9px;font-weight:700;border-radius:5px;padding:2px 7px;flex-shrink:0;}
-.fch-hi{background:#fef2f2;color:#b91c1c;}
-.fch-md{background:#fffbeb;color:#92400e;}
-.fch-lo{background:#f0fdf4;color:#14532d;}
-.fc-score{font-family:'Syne',sans-serif;font-size:12.5px;font-weight:800;flex-shrink:0;}
+.fc-score{font-family:var(--num);font-size:13px;font-weight:800;flex-shrink:0;letter-spacing:-0.02em;}
 .fc-bar{height:5px;background:#eaeeec;border-radius:99px;overflow:hidden;margin-bottom:7px;}
 .fc-fill{height:100%;border-radius:99px;width:0%;transition:width 1.2s cubic-bezier(0.22,1,0.36,1);}
 .fc-what{font-size:10.5px;color:var(--mut);line-height:1.55;margin-bottom:5px;}
@@ -380,7 +556,20 @@ body{font-family:'DM Sans',sans-serif;background:var(--page);color:var(--txt);di
 .fc-dir{font-size:9px;color:var(--faint);font-family:var(--mono);}
 .fc-wlbl{font-size:9px;color:var(--g);font-family:var(--mono);font-weight:600;}
 .vc-foot{padding:14px 20px;display:flex;align-items:center;gap:5px;font-size:10px;color:var(--faint);border-top:1px solid var(--brd);margin-top:2px;}
-/* ── EMPTY RESULTS STATE ──────────────────────────────────── */
+
+/* Scrollable body inside each result card — starts at Genre */
+.vc-body{
+  overflow-y:auto;
+  max-height:340px;
+  scrollbar-width:thin;
+  scrollbar-color:var(--brd) transparent;
+}
+.vc-body::-webkit-scrollbar{width:4px;}
+.vc-body::-webkit-scrollbar-track{background:transparent;}
+.vc-body::-webkit-scrollbar-thumb{background:var(--brd);border-radius:99px;}
+.vc-body::-webkit-scrollbar-thumb:hover{background:#b8c8c0;}
+
+/* ── EMPTY STATE ──────────────────────────────────────────── */
 .rl-empty{
   display:flex;flex-direction:column;align-items:center;justify-content:center;
   height:100%;min-height:300px;color:var(--faint);text-align:center;gap:12px;
@@ -388,14 +577,57 @@ body{font-family:'DM Sans',sans-serif;background:var(--page);color:var(--txt);di
 .rl-empty svg{opacity:0.3;}
 .rl-empty p{font-size:13px;line-height:1.6;max-width:220px;}
 
+/* ── REPORT MODAL ─────────────────────────────────────────── */
+.rmo{position:fixed;inset:0;background:rgba(15,26,20,0.52);z-index:9000;display:flex;align-items:center;justify-content:center;padding:20px;opacity:0;pointer-events:none;transition:opacity 0.18s;}
+.rmo.open{opacity:1;pointer-events:all;}
+.rm{background:#fff;border-radius:18px;width:100%;max-width:420px;box-shadow:0 20px 60px rgba(0,0,0,0.22);overflow:hidden;transform:translateY(12px) scale(0.98);transition:transform 0.2s cubic-bezier(0.22,1,0.36,1);}
+.rmo.open .rm{transform:translateY(0) scale(1);}
+.rm-head{display:flex;align-items:center;gap:10px;padding:16px 18px 14px;border-bottom:1px solid var(--brd);}
+.rm-head-ico{width:32px;height:32px;border-radius:9px;background:#fffbeb;border:1px solid #fde68a;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.rm-title{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;flex:1;}
+.rm-track{font-size:10px;color:var(--mut);font-family:var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px;}
+.rm-close{background:none;border:none;font-size:18px;color:var(--faint);cursor:pointer;padding:4px;line-height:1;transition:color 0.12s;}
+.rm-close:hover{color:var(--txt);}
+.rm-body{padding:16px 18px 18px;display:flex;flex-direction:column;gap:12px;}
+.rm-verdict-row{display:flex;align-items:center;gap:8px;background:#f5f8f6;border-radius:9px;padding:9px 12px;}
+.rm-verdict-lbl{font-size:10px;color:var(--mut);}
+.rm-verdict-val{font-size:11px;font-weight:700;font-family:'Syne',sans-serif;margin-left:auto;}
+.rm-field{display:flex;flex-direction:column;gap:5px;}
+.rm-label{font-size:10px;font-weight:600;color:var(--txt);text-transform:uppercase;letter-spacing:0.06em;font-family:var(--mono);}
+.rm-radios{display:flex;flex-direction:column;gap:5px;}
+.rm-radio{display:flex;align-items:center;gap:9px;padding:8px 11px;border:1.5px solid var(--brd);border-radius:9px;cursor:pointer;transition:border-color 0.14s,background 0.14s;font-size:12px;}
+.rm-radio:hover{border-color:rgba(23,168,112,0.4);background:rgba(23,168,112,0.03);}
+.rm-radio input{accent-color:var(--g);width:14px;height:14px;flex-shrink:0;cursor:pointer;}
+.rm-radio.sel{border-color:var(--g);background:rgba(23,168,112,0.05);}
+.rm-select{width:100%;padding:9px 11px;border:1.5px solid var(--brd);border-radius:9px;font-family:'DM Sans',sans-serif;font-size:12px;color:var(--txt);background:#fff;cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%236b7e75' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 11px center;outline:none;transition:border-color 0.14s;}
+.rm-select:focus{border-color:var(--g);}
+.rm-textarea{width:100%;padding:9px 11px;border:1.5px solid var(--brd);border-radius:9px;font-family:'DM Sans',sans-serif;font-size:12px;color:var(--txt);resize:vertical;min-height:72px;outline:none;transition:border-color 0.14s;line-height:1.5;}
+.rm-textarea:focus{border-color:var(--g);}
+.rm-textarea::placeholder{color:var(--faint);}
+.rm-charcount{font-size:9px;color:var(--faint);font-family:var(--mono);text-align:right;margin-top:2px;}
+.rm-actions{display:flex;gap:8px;margin-top:2px;}
+.rm-cancel{flex:0 0 auto;padding:10px 18px;border:1.5px solid var(--brd);border-radius:10px;background:none;font-family:'DM Sans',sans-serif;font-size:12.5px;color:var(--mut);cursor:pointer;transition:border-color 0.14s,color 0.14s;}
+.rm-cancel:hover{border-color:var(--red);color:var(--red);}
+.rm-submit{flex:1;padding:10px 18px;border:none;border-radius:10px;background:var(--g);font-family:'Syne',sans-serif;font-size:13px;font-weight:700;color:#fff;cursor:pointer;transition:background 0.14s,opacity 0.14s;}
+.rm-submit:hover:not(:disabled){background:var(--gd);}
+.rm-submit:disabled{opacity:0.5;cursor:not-allowed;}
+.rm-success{display:flex;flex-direction:column;align-items:center;gap:10px;padding:32px 18px 28px;text-align:center;}
+.rm-success-ico{width:48px;height:48px;background:#f0fdf4;border-radius:50%;border:2px solid rgba(23,168,112,0.25);display:flex;align-items:center;justify-content:center;}
+.rm-success-title{font-family:'Syne',sans-serif;font-size:14px;font-weight:700;}
+.rm-success-sub{font-size:12px;color:var(--mut);line-height:1.5;max-width:280px;}
+.rm-success-id{font-size:9px;font-family:var(--mono);color:var(--faint);margin-top:4px;}
+.rm-err{font-size:11px;color:var(--red);background:#fff5f5;border:1px solid #fca5a5;border-radius:7px;padding:7px 11px;display:none;}
+.rm-err.on{display:block;}
+
 @media(max-width:840px){
   .content-row{flex-direction:column;}
   .rp{width:100%;border-right:none;border-bottom:1px solid var(--brd);}
   #rl-wrapper{padding:24px 16px;}
-  #page-landing{padding:52px 26px;}
+  #page-landing{padding:48px 28px;}
+  #page-landing h1{font-size:clamp(32px,8vw,52px);}
+  #page-landing p{font-size:15px;}
+  .vc-body{max-height:280px;}
 }
-
-
 </style>
 </head>
 <body>
@@ -405,33 +637,26 @@ body{font-family:'DM Sans',sans-serif;background:var(--page);color:var(--txt);di
 ════════════════════════════════════════════════════════════ -->
 <div class="page active" id="page-landing">
   <canvas class="wc" id="wc-landing"></canvas>
-
   <div class="hero-ico" style="position:relative;z-index:1;">
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white"
-      stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
       <circle cx="12" cy="12" r="2"/>
       <path d="M16.24 7.76a6 6 0 0 1 0 8.49M7.76 16.24a6 6 0 0 1 0-8.49"/>
       <path d="M20.49 3.51a12 12 0 0 1 0 16.99M3.51 20.49a12 12 0 0 1 0-16.99"/>
     </svg>
   </div>
-
   <h1 style="position:relative;z-index:1;">AI Music<br>Detection<br>System</h1>
-
   <p style="position:relative;z-index:1;">
-    Upload a track and get a full acoustic breakdown of whether it was composed by a human or generated by AI.
+    Upload any track and get an instant acoustic breakdown Human or AI-generated with full genre classification and signal-level explanations
   </p>
-
   <div class="fmt-badge">
     <span class="fmt-lbl">Supported Formats</span>
     <span class="fmt-val">MP3 · WAV · FLAC · M4A · OGG · AAC</span>
   </div>
-
   <div class="fair-notice">
     <span class="fair-dot"></span>
-    <span class="fair-txt"><strong>Format-fair analysis.</strong> All formats are converted to 16kHz WAV before analysis — no codec-based bias.</span>
+    <span class="fair-txt"><strong>Format-fair analysis.</strong> All formats are converted to 16 kHz WAV before analysis — no codec-based bias in the results.</span>
   </div>
-
-  <button class="btn-start" onclick="showPage('upload')">Get Started</button>
+  <button class="btn-start" onclick="showPage('upload')">Get Started →</button>
 </div>
 
 <!-- ═══════════════════════════════════════════════════════════
@@ -439,10 +664,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--page);color:var(--txt);di
 ════════════════════════════════════════════════════════════ -->
 <div class="page" id="page-upload">
 
-  <!-- Top hero banner -->
   <section class="hero" id="hs">
     <canvas class="wc" id="wc-upload"></canvas>
-
     <button class="btn-back" onclick="showPage('landing')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
@@ -450,11 +673,9 @@ body{font-family:'DM Sans',sans-serif;background:var(--page);color:var(--txt);di
       </svg>
       Home
     </button>
-
     <div class="hero-title-row">
       <div class="hero-ico" style="width:60px;height:60px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.15);border:1.5px solid rgba(255,255,255,0.26);border-radius:16px;margin-bottom:0;">
-        <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="white"
-          stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="2"/>
           <path d="M16.24 7.76a6 6 0 0 1 0 8.49"/>
           <path d="M7.76 16.24a6 6 0 0 1 0-8.49"/>
@@ -462,24 +683,21 @@ body{font-family:'DM Sans',sans-serif;background:var(--page);color:var(--txt);di
           <path d="M3.51 20.49a12 12 0 0 1 0-16.99"/>
         </svg>
       </div>
-      <h1>AI Music<br>Detection System</h1>
+      <h1>AI Music Detection System</h1>
     </div>
   </section>
 
-  <!-- Content row: left upload + right results -->
   <div class="content-row">
 
     <!-- LEFT: Upload panel -->
     <div class="rp" id="rp">
       <div class="pt">Upload Audio</div>
       <div class="ps">Any format · automatically converted to 16kHz WAV for accurate detection</div>
-
       <div class="uc">
         <div class="dz" id="dz">
           <input type="file" id="fi" accept=".mp3,.wav,.flac,.ogg,.m4a,.aac"/>
           <div class="dz-ico">
-            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#17a870"
-              stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#17a870" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="16 16 12 12 8 16"/>
               <line x1="12" y1="12" x2="12" y2="21"/>
               <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/>
@@ -492,8 +710,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--page);color:var(--txt);di
         <div class="sw" id="sw">
           <div class="sf" id="sf">
             <div class="sf-ico">
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#17a870"
-                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#17a870" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M9 18V5l12-2v13"/>
                 <circle cx="6" cy="18" r="3"/>
                 <circle cx="18" cy="16" r="3"/>
@@ -511,22 +728,25 @@ body{font-family:'DM Sans',sans-serif;background:var(--page);color:var(--txt);di
           <button class="btn-cl" onclick="clearAll()">Clear Results</button>
         </div>
       </div>
-
       <div class="sb" id="sb"><div class="spin"></div><span id="st">Analyzing…</span></div>
       <div class="eb" id="eb"></div>
     </div>
 
-   <!-- RIGHT: Results + Acoustic panels -->
+    <!-- RIGHT: Results + Acoustic panels -->
     <div id="rl-wrapper">
-
-      <!-- Panel 1: Analysis Results -->
       <div id="results-panel">
         <div id="rl-title">Analysis Results</div>
         <div id="rl-and-acoustic">
-          <!-- Result card -->
-          <div id="rl"></div>
-
-          <!-- Panel 2: Acoustic Signal Breakdown — sits beside the card -->
+          <div id="rl">
+            <div class="rl-empty" id="rl-empty">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="2"/>
+                <path d="M16.24 7.76a6 6 0 0 1 0 8.49M7.76 16.24a6 6 0 0 1 0-8.49"/>
+                <path d="M20.49 3.51a12 12 0 0 1 0 16.99M3.51 20.49a12 12 0 0 1 0-16.99"/>
+              </svg>
+              <p>Upload and analyze a track to see results here</p>
+            </div>
+          </div>
           <div id="acoustic-panel">
             <div class="acoustic-header">
               <span class="acoustic-header-pill">Why?</span>
@@ -537,13 +757,84 @@ body{font-family:'DM Sans',sans-serif;background:var(--page);color:var(--txt);di
           </div>
         </div>
       </div>
-
     </div>
 
-  </div><!-- /content-row -->
-</div><!-- /page-upload -->
+  </div>
+</div>
 
-
+<!-- ── Report Modal ─────────────────────────────────────────── -->
+<div class="rmo" id="rmo" onclick="if(event.target===this)closeReport()">
+  <div class="rm">
+    <div id="rm-form-view">
+      <div class="rm-head">
+        <div class="rm-head-ico">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#92400e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+            <line x1="12" y1="9" x2="12" y2="13"/>
+            <line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div class="rm-title">Report Misclassification</div>
+          <div class="rm-track" id="rm-track-name">—</div>
+        </div>
+        <button class="rm-close" onclick="closeReport()">✕</button>
+      </div>
+      <div class="rm-body">
+        <div class="rm-verdict-row">
+          <span class="rm-verdict-lbl">Current verdict</span>
+          <span class="rm-verdict-val" id="rm-current-verdict">—</span>
+        </div>
+        <div class="rm-field">
+          <div class="rm-label">What should it be?</div>
+          <div class="rm-radios">
+            <label class="rm-radio" id="rr-human">
+              <input type="radio" name="correct_label" value="human" onchange="onLabelChange(this)"/>
+              <span>Human-made — this track was created by a real musician</span>
+            </label>
+            <label class="rm-radio" id="rr-ai">
+              <input type="radio" name="correct_label" value="ai" onchange="onLabelChange(this)"/>
+              <span>AI-generated — this track was created by an AI model</span>
+            </label>
+          </div>
+        </div>
+        <div class="rm-field">
+          <div class="rm-label">Reason</div>
+          <select class="rm-select" id="rm-reason">
+            <option value="">Select a reason…</option>
+            <option value="false_ai">Wrongly flagged as AI-generated</option>
+            <option value="false_human">Wrongly flagged as Human / Not Sure</option>
+            <option value="score_off">Score seems way too high or too low</option>
+            <option value="other">Other / I can explain below</option>
+          </select>
+        </div>
+        <div class="rm-field">
+          <div class="rm-label">Additional context <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--faint)">(optional)</span></div>
+          <textarea class="rm-textarea" id="rm-comment" maxlength="500" placeholder="e.g. This is Radiohead — Blow Out, a 1993 track on Pablo Honey…" oninput="updateCharCount()"></textarea>
+          <div class="rm-charcount"><span id="rm-charcount">0</span> / 500</div>
+        </div>
+        <div class="rm-err" id="rm-err"></div>
+        <div class="rm-actions">
+          <button class="rm-cancel" onclick="closeReport()">Cancel</button>
+          <button class="rm-submit" id="rm-submit" onclick="submitReport()" disabled>Submit Report</button>
+        </div>
+      </div>
+    </div>
+    <div id="rm-success-view" style="display:none;">
+      <div class="rm-success">
+        <div class="rm-success-ico">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#17a870" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+        </div>
+        <div class="rm-success-title">Report submitted</div>
+        <div class="rm-success-sub">Thank you — your report helps improve the detector's accuracy over time.</div>
+        <div class="rm-success-id" id="rm-success-id"></div>
+        <button class="rm-submit" style="margin-top:12px;padding:9px 28px;flex:none;" onclick="closeReport()">Done</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <script>
 // ── PAGE SWITCHING ─────────────────────────────────────────
@@ -589,7 +880,6 @@ function initWave(canvasId, container) {
   init();draw();
   window._rafs[canvasId]=raf;
 }
-
 initWave('wc-landing', document.getElementById('page-landing'));
 
 // ── FILE HANDLING ──────────────────────────────────────────
@@ -670,20 +960,12 @@ function prepend(r){
   const list=document.getElementById('rl');
   const wrapper=document.getElementById('rl-wrapper');
   const acousticPanel=document.getElementById('acoustic-panel');
-
-  // remove empty state
   const empty=document.getElementById('rl-empty');
   if(empty)empty.remove();
-
-  // show results wrapper
   wrapper.classList.add('visible');
-
-  // build and insert result card (without xai section)
   const node=buildCard(r);
   list.insertBefore(node,list.firstChild);
   requestAnimationFrame(()=>requestAnimationFrame(()=>setTimeout(()=>animateCard(node,r),60)));
-
-  // populate acoustic panel separately
   if(r.xai&&r.xai.length){
     const acoustic=r.xai.filter(f=>!f.is_primary);
     if(acoustic.length){
@@ -692,9 +974,17 @@ function prepend(r){
       const content=document.getElementById('acoustic-content');
       content.innerHTML='';
       acoustic.forEach(f=>{
-        const chipCls=f.score>=65?'fch-hi':f.score>=35?'fch-md':'fch-lo';
-        const chipLbl=f.score>=65?'Strong AI signal':f.score>=35?'Moderate':'Human-like';
-        const barCol=f.score>=65?'#ef4444':f.score>=35?'#f59e0b':'#22c55e';
+        // ── Colour-coded badge + bar logic (from file 2) ──────────
+        const badge = f.badge||(f.score>=65?'AI-like':f.score>=36?'Neutral':'Human-like');
+        const badgeCls = badge.toLowerCase()==='ai-like'   ? 'fch-hi'
+                       : badge.toLowerCase()==='neutral'   ? 'fch-md'
+                       :                                     'fch-lo';
+        const barCls   = badge.toLowerCase()==='ai-like'   ? 'bar-ai'
+                       : badge.toLowerCase()==='neutral'   ? 'bar-neutral'
+                       :                                     'bar-human';
+        const scoreCol = badge.toLowerCase()==='ai-like'   ? '#dc2626'
+                       : badge.toLowerCase()==='neutral'   ? '#d97706'
+                       :                                     '#16a34a';
         const isOverridden=f.overridden_by_neural===true;
         const el=document.createElement('div');
         el.className='fc'+(isOverridden?' fc-override':'');
@@ -702,10 +992,10 @@ function prepend(r){
           <div class="fc-top">
             <div class="fc-name">${esc(f.label)}</div>
             ${isOverridden?'<span class="fc-override-badge">Overridden</span>':''}
-            <div class="fc-chip ${chipCls}">${chipLbl}</div>
-            <div class="fc-score" style="color:${barCol}">${f.score}%</div>
+            <div class="fc-chip ${badgeCls}">${esc(badge)}</div>
+            <div class="fc-score" style="color:${scoreCol}">${f.score}%</div>
           </div>
-          <div class="fc-bar"><div class="fc-fill" data-val="${f.score}" style="background:${barCol}"></div></div>
+          <div class="fc-bar"><div class="fc-fill ${barCls}" data-val="${f.score}"></div></div>
           <div class="fc-what">${esc(f.what)}</div>
           <div class="fc-why">${esc(f.why)}</div>
           <div class="fc-meta">
@@ -719,13 +1009,17 @@ function prepend(r){
   }
 }
 
+// ── HELPERS ───────────────────────────────────────────────
 function pc(p){return p<35?'#22c55e':p<65?'#f59e0b':'#ef4444';}
+
 function verdictChip(verdict){
   const v=(verdict||'').toLowerCase();
   if(v.includes('ai-generated'))return{cls:'ch-ai',dot:'#ef4444'};
+  if(v==='not sure'||v.includes('uncertain')||v.includes('not sure'))return{cls:'ch-mid',dot:'#f59e0b'};
   if(v.includes('human'))return{cls:'ch-hum',dot:'#22c55e'};
   return{cls:'ch-mid',dot:'#f59e0b'};
 }
+
 function confLabel(c){
   const s=(c||'').toLowerCase();
   if(s.includes('high'))return'High conf.';
@@ -733,13 +1027,15 @@ function confLabel(c){
   if(s.includes('low'))return'Low conf.';
   return'';
 }
-function summaryText(verdict,confidence){
+
+function summaryText(verdict){
   const v=(verdict||'').toLowerCase();
-  const hi=(confidence||'').toLowerCase().includes('high');
-  if(v.includes('ai-generated'))return hi?'Strong AI-like audio characteristics detected':'Notable AI-like characteristics found';
-  if(v.includes('human'))return hi?'Strong human audio characteristics':'Mostly human audio characteristics';
+  if(v.includes('ai-generated'))return'AI-like audio characteristics detected';
+  if(v==='not sure'||v.includes('uncertain')||v.includes('not sure'))return'Signal is ambiguous — result is uncertain';
+  if(v.includes('human'))return'Mostly human audio characteristics';
   return'Mixed characteristics — result is uncertain';
 }
+
 function gauge(pct){
   const r=30,cx=40,cy=40,sw=6,circ=2*Math.PI*r;
   const sa=-Math.PI*.75,sweep=Math.PI*1.5;
@@ -752,6 +1048,7 @@ function gauge(pct){
       class="garc" data-circ="${circ}" stroke-dasharray="${circ}" stroke-dashoffset="${circ}"/>
   </svg>`;
 }
+
 function blendBar(sb,diagnostics){
   if(!sb)return'';
   const np=sb.neural_weight_pct||60,ap=sb.acoustic_weight_pct||40;
@@ -763,13 +1060,22 @@ function blendBar(sb,diagnostics){
   const finalTotal=Math.round(totalBase*compPen*clipDamping);
   return`<div class="blend-row">
     <div class="blend-lbl">Score composition</div>
+    <div class="blend-explain">Bar shows the <strong>weights</strong> applied to each source. The neural model weight is reduced slightly when the two models strongly disagree.</div>
     <div class="blend-bar-wrap">
       <div class="blend-seg-n" style="width:${np}%;"></div>
       <div class="blend-seg-a" style="width:${ap}%;"></div>
     </div>
     <div class="blend-meta">
-      <span><span class="blend-dot" style="background:#17a870;"></span>Neural ${np}% · +${nc.toFixed(1)}pts</span>
-      <span><span class="blend-dot" style="background:#a8b4ae;"></span>Acoustic ${ap}% · +${ac.toFixed(1)}pts</span>
+      <div class="blend-col">
+        <div class="blend-key"><span class="blend-dot" style="background:#17a870;"></span>Neural model</div>
+        <div class="blend-weight">Weight: ${np}% — spectrogram pattern analysis</div>
+        <div class="blend-pts" style="color:#17a870;">+${nc.toFixed(1)} pts this track</div>
+      </div>
+      <div class="blend-col blend-col-right">
+        <div class="blend-key blend-key-right"><span class="blend-dot" style="background:#a8b4ae;"></span>Acoustic features</div>
+        <div class="blend-weight">Weight: ${ap}% — signal characteristic analysis</div>
+        <div class="blend-pts" style="color:var(--mut);">+${ac.toFixed(1)} pts this track</div>
+      </div>
     </div>
     ${hasPenalty?`<div style="margin-top:6px;padding-top:4px;border-top:1px solid #e3ebe7;font-size:8px;color:var(--faint);font-family:var(--mono);">
       <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px;">
@@ -780,6 +1086,7 @@ function blendBar(sb,diagnostics){
       </div></div>`:''}
   </div>`;
 }
+
 function fileInfo(r){
   const dur=r.duration_sec||0,mins=Math.floor(dur/60),secs=Math.round(dur%60);
   const durStr=mins>0?`${mins}:${String(secs).padStart(2,'0')}`:`${secs}s`;
@@ -788,39 +1095,29 @@ function fileInfo(r){
     <div class="info-item"><span class="info-val">100%</span><span class="info-lbl">Coverage</span></div>
   </div>`;
 }
-function xaiHtml(xai){
-  if(!xai||!xai.length)return'';
-  const acoustic=xai.filter(f=>!f.is_primary);
-  if(!acoustic.length)return'';
-  const rows=acoustic.map(f=>{
-    const chipCls=f.score>=65?'fch-hi':f.score>=35?'fch-md':'fch-lo';
-    const chipLbl=f.score>=65?'Strong AI signal':f.score>=35?'Moderate':'Human-like';
-    const barCol=f.score>=65?'#ef4444':f.score>=35?'#f59e0b':'#22c55e';
-    const isOverridden=f.overridden_by_neural===true;
-    return`<div class="fc ${isOverridden?'fc-override':''}">
-      <div class="fc-top">
-        <div class="fc-name">${esc(f.label)}</div>
-        ${isOverridden?'<span class="fc-override-badge">Overridden</span>':''}
-        <div class="fc-chip ${chipCls}">${chipLbl}</div>
-        <div class="fc-score" style="color:${barCol}">${f.score}%</div>
-      </div>
-      <div class="fc-bar"><div class="fc-fill" data-val="${f.score}" style="background:${barCol}"></div></div>
-      <div class="fc-what">${esc(f.what)}</div>
-      <div class="fc-why">${esc(f.why)}</div>
-      <div class="fc-meta">
-        <span class="fc-dir">Measured: ${esc(f.value)} · ${esc(f.direction)}</span>
-        ${f.weight_label?`<span class="fc-wlbl">${esc(f.weight_label)}</span>`:''}
-      </div>
-    </div>`;
+
+// ── GENRE ─────────────────────────────────────────────────
+function genreHtml(genre){
+  if(!genre||!genre.available)return'';
+  if(!genre.top)return`<div class="genre-card"><div class="genre-header"><span class="genre-pill">Genre</span><span style="font-size:11px;color:var(--faint)">Classification unavailable for this track</span></div></div>`;
+  const top=genre.top,all=(genre.all||[]).slice(0,7),subgenres=genre.subgenres||{};
+  const topSub=genre.top_subgenre,stability=genre.stability||0,confNote=genre.confidence_note||'';
+  const sources=(genre.sources||[]).join(' · ')||'single model',windows=genre.window_count||0;
+  const pipsOn=Math.round(stability/20);
+  let pipsHtml='';for(let i=0;i<5;i++)pipsHtml+=`<span class="stability-pip${i<pipsOn?' on':''}"></span>`;
+  const subChipHtml=topSub?`<span class="genre-sub-chip"><strong>${esc(topSub.parent)}</strong> · ${esc(topSub.label)} <span style="font-family:var(--mono);font-size:9px;opacity:0.7">${Math.round(topSub.score)}%</span></span>`:'';
+  const maxScore=all.length?all[0].score:1;
+  const barsHtml=all.map((g,i)=>{
+    const pct=Math.round(g.score),barW=maxScore>0?Math.round((g.score/maxScore)*100):0,isTop=i===0;
+    const subs=(subgenres[g.label]||[]).slice(0,3);
+    const topSubLabel=topSub&&topSub.parent===g.label?topSub.label:null;
+    const subTagsHtml=subs.length?`<div class="genre-subgenres">${subs.map(s=>`<span class="genre-sub-tag${s.label===topSubLabel?' top-sub':''}">${esc(s.label)}</span>`).join('')}</div>`:'';
+    return`<div><div class="genre-row${isTop?' top':''}"><span class="genre-row-label" title="${esc(g.label)}">${esc(g.label)}</span><div class="genre-row-bar-wrap"><div class="genre-row-bar" data-w="${barW}"></div></div><span class="genre-row-pct">${pct}%</span></div>${subTagsHtml}</div>`;
   }).join('');
-  return`<div class="xai">
-    <div class="xai-hd">
-      <span class="xai-pill">Why?</span>
-      <span class="xai-ttl">Acoustic Signal Breakdown</span>
-      <span class="xai-sub">${acoustic.length} signals</span>
-    </div>${rows}
-  </div>`;
+  return`<div class="genre-card"><div class="genre-header"><span class="genre-pill">Genre</span><div class="genre-title-row"><span class="genre-main-name">${esc(top.label)}</span><span class="genre-top-chip"><span class="genre-top-pct">${Math.round(top.score)}%</span> match</span>${subChipHtml}<span class="genre-conf-note">${esc(confNote)}</span></div></div><div class="genre-bars">${barsHtml}</div><div class="genre-meta"><div class="genre-meta-item"><strong>Stability:</strong><span style="display:inline-flex;align-items:center;gap:4px;"><span class="stability-pips">${pipsHtml}</span>${stability}%</span></div>${windows?`<div class="genre-meta-item"><strong>Windows:</strong> ${windows} analysed</div>`:''}<div class="genre-meta-item"><strong>Sources:</strong> ${esc(sources)}</div></div></div>`;
 }
+
+// ── BUILD CARD ─────────────────────────────────────────────
 function buildCard(r){
   const card=document.createElement('div');
   card.className='vc';
@@ -831,13 +1128,19 @@ function buildCard(r){
       <div style="padding:12px 16px;font-size:12.5px;color:var(--red)">${esc(r.error)}</div>`;
     return card;
   }
-  const pct=r.ai_probability??0,verdict=r.verdict||'Uncertain',confidence=r.confidence||'';
+  const pct=r.ai_probability??0,verdict=r.verdict||'Not Sure',confidence=r.confidence||'';
   const explanation=r.verdict_explanation||'',vc=verdictChip(verdict),cl=confLabel(confidence);
   const originalFmt=r.original_format||'',analyzedFmt=r.analyzed_format||'WAV (16kHz)';
   const conversionNote=r.conversion_note||'';
   const displayFilename=r.display_filename||r.analyzed_file||r.filename;
-  const convertedWavPath=r.converted_wav_path||'';
-  const downloadHtml=convertedWavPath?`<a href="${convertedWavPath}" download class="download-badge">📥 Download WAV</a>`:'';
+
+  card._reportData={
+    filename:r.original_filename||r.filename||displayFilename,
+    original_verdict:verdict,ai_probability:pct,
+    genre:r.genre?.top?.label||null,
+    codec_detected:r.score_breakdown?.codec_compression?.detected||false,
+  };
+
   card.innerHTML=`
     <div class="vc-stripe" style="background:${pc(pct)}"></div>
     <div class="vc-fname-row">
@@ -846,15 +1149,22 @@ function buildCard(r){
     <div class="vc-topbar">
       ${originalFmt?`<span class="fmt-tag">📁 ${esc(originalFmt)}</span>`:''}
       <span class="conversion-badge">🔄 ${esc(analyzedFmt)}</span>
-      ${downloadHtml}
       ${cl?`<span class="conf-tag">${esc(cl)}</span>`:''}
       <span class="vchip ${vc.cls}"><span class="vchip-dot" style="background:${vc.dot}"></span>${esc(verdict)}</span>
+      <button class="btn-report" onclick="openReport(this)" title="Report misclassification">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+          <line x1="12" y1="9" x2="12" y2="13"/>
+          <line x1="12" y1="17" x2="12.01" y2="17"/>
+        </svg>
+        Report
+      </button>
     </div>
     ${conversionNote?`<div class="conversion-note"><span>🔄 ${esc(conversionNote)}</span></div>`:''}
     <div class="vc-score">
       <div class="gw">${gauge(pct)}<div class="gnum" style="color:${pc(pct)}">${pct}%</div><div class="glbl">AI Score</div></div>
       <div class="sr">
-        <div class="sr-title">${esc(summaryText(verdict,confidence))}</div>
+        <div class="sr-title">${esc(summaryText(verdict))}</div>
         ${explanation?`<div class="sr-expl" title="${esc(explanation)}">${esc(explanation)}</div>`:''}
         <div class="cr-lbl"><span>Human</span><span>Uncertain</span><span>AI</span></div>
         <div class="cr-rail"><div class="cr-thumb" data-pct="${pct}"></div></div>
@@ -862,20 +1172,23 @@ function buildCard(r){
       </div>
     </div>
     <div class="div"></div>
-    ${r.score_breakdown?blendBar(r.score_breakdown,r.diagnostics):''}
-    <div class="div"></div>
-    ${fileInfo(r)}
-    <div class="div"></div>
-    <div class="vc-foot">
-      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-        <circle cx="12" cy="12" r="10"/>
-        <line x1="12" y1="8" x2="12" y2="12"/>
-        <line x1="12" y1="16" x2="12.01" y2="16"/>
-      </svg>
-      All formats converted to 16kHz WAV for fair, accurate detection.
+    <div class="vc-body">
+      ${r.genre?genreHtml(r.genre):''}
+      ${r.score_breakdown?blendBar(r.score_breakdown,r.diagnostics):''}
+      <div class="div"></div>
+      ${fileInfo(r)}
+      <div class="vc-foot">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="12" y1="8" x2="12" y2="12"/>
+          <line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+        All formats converted to 16kHz WAV for fair, accurate detection.
+      </div>
     </div>`;
   return card;
 }
+
 function animateCard(card,r){
   const pct=r.ai_probability??0;
   const t=card.querySelector('.cr-thumb');
@@ -888,7 +1201,88 @@ function animateCard(card,r){
     arc.style.strokeDashoffset=circ-drawn;
   }
   card.querySelectorAll('.fc-fill').forEach(el=>{el.style.width=(el.dataset.val||'0')+'%';});
+  card.querySelectorAll('.genre-row-bar').forEach(el=>{el.style.width=(el.dataset.w||'0')+'%';});
 }
+
+// ── REPORT MODAL ───────────────────────────────────────────
+let _activeBtn=null,_reportData=null;
+
+function openReport(btn){
+  _activeBtn=btn;
+  const card=btn.closest('.vc');
+  _reportData=card._reportData||{};
+  document.querySelectorAll('.rm-radio').forEach(l=>l.classList.remove('sel'));
+  document.querySelectorAll('input[name="correct_label"]').forEach(i=>i.checked=false);
+  document.getElementById('rm-reason').value='';
+  document.getElementById('rm-comment').value='';
+  document.getElementById('rm-charcount').textContent='0';
+  document.getElementById('rm-err').classList.remove('on');
+  document.getElementById('rm-err').textContent='';
+  document.getElementById('rm-submit').disabled=true;
+  document.getElementById('rm-form-view').style.display='';
+  document.getElementById('rm-success-view').style.display='none';
+  const fname=_reportData.filename||'Unknown track';
+  document.getElementById('rm-track-name').textContent=fname.length>50?fname.slice(0,48)+'…':fname;
+  const verd=_reportData.original_verdict||'—',prob=_reportData.ai_probability??0,vc=verdictChip(verd);
+  document.getElementById('rm-current-verdict').innerHTML=
+    `<span class="vchip ${vc.cls}" style="font-size:10px;"><span class="vchip-dot" style="background:${vc.dot}"></span>${esc(verd)}</span>&nbsp;<span style="font-size:10px;color:var(--mut);font-family:var(--mono)">${prob}%</span>`;
+  document.getElementById('rmo').classList.add('open');
+}
+
+function closeReport(){
+  document.getElementById('rmo').classList.remove('open');
+  _activeBtn=null;_reportData=null;
+}
+
+function onLabelChange(radio){
+  document.querySelectorAll('.rm-radio').forEach(l=>l.classList.remove('sel'));
+  radio.closest('.rm-radio').classList.add('sel');
+  validateReportForm();
+}
+function updateCharCount(){document.getElementById('rm-charcount').textContent=document.getElementById('rm-comment').value.length;}
+function validateReportForm(){
+  const label=document.querySelector('input[name="correct_label"]:checked');
+  const reason=document.getElementById('rm-reason').value;
+  document.getElementById('rm-submit').disabled=!label||!reason;
+}
+document.getElementById('rm-reason').addEventListener('change',validateReportForm);
+
+async function submitReport(){
+  const label=document.querySelector('input[name="correct_label"]:checked');
+  const reason=document.getElementById('rm-reason').value;
+  if(!label||!reason)return;
+  const btn=document.getElementById('rm-submit');
+  btn.disabled=true;btn.textContent='Submitting…';
+  document.getElementById('rm-err').classList.remove('on');
+  const payload={
+    filename:_reportData.filename||'unknown',
+    original_verdict:_reportData.original_verdict||'',
+    ai_probability:_reportData.ai_probability??0,
+    correct_label:label.value,reason,
+    comment:document.getElementById('rm-comment').value.trim(),
+    genre:_reportData.genre||null,
+    codec_detected:_reportData.codec_detected||false,
+  };
+  try{
+    const res=await fetch('/report',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    const data=await res.json();
+    if(!res.ok)throw new Error(data.error||'Server error');
+    document.getElementById('rm-form-view').style.display='none';
+    document.getElementById('rm-success-view').style.display='';
+    document.getElementById('rm-success-id').textContent=`Report ID: ${data.report_id||'—'}`;
+    if(_activeBtn){
+      _activeBtn.classList.add('reported');
+      _activeBtn.innerHTML=`<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Reported`;
+      _activeBtn.onclick=null;
+    }
+  }catch(e){
+    const errEl=document.getElementById('rm-err');
+    errEl.textContent='Failed to submit: '+e.message;errEl.classList.add('on');
+    btn.disabled=false;btn.textContent='Submit Report';
+  }
+}
+
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeReport();});
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 </script>
 </body>
