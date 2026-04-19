@@ -18,6 +18,22 @@ import subprocess
 
 warnings.filterwarnings("ignore")
 
+# ── Custom JSON encoder for numpy/torch types ─────────────────────────────────
+import json as _json
+
+class _SafeEncoder(_json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.integer):   return int(obj)
+        if isinstance(obj, np.floating):  return float(obj)
+        if isinstance(obj, np.ndarray):   return obj.tolist()
+        if isinstance(obj, np.bool_):     return bool(obj)
+        try:
+            import torch as _t
+            if isinstance(obj, _t.Tensor): return obj.detach().cpu().tolist()
+        except ImportError:
+            pass
+        return super().default(obj)
+
 # ── Config ────────────────────────────────────────────────────────────────────
 SAMPLE_RATE     = 16000
 HOP_LENGTH      = 160
@@ -32,17 +48,11 @@ SAVE_CONVERTED_WAV = True
 CONVERTED_WAV_DIR  = "converted_wavs"
 REPORTS_FILE       = "misclassification_reports.jsonl"
 
-LOGIT_TEMPERATURE = 1.0
-CLIP_THRESHOLD    = 0.95
-CLIP_RATIO_SOFT   = 0.01
-CLIP_RATIO_HARD   = 0.10
-CLIP_MIN_WEIGHT   = 0.40
 PROB_FLOOR        = 3.0
 PROB_CEILING      = 97.0
 
-# CRITICAL FIX: Restored neural network weight to be dominant
-NEURAL_WEIGHT = 0.85      # Neural network is more reliable
-ACOUSTIC_WEIGHT = 0.15    # Acoustic features are supportive only
+NEURAL_WEIGHT = 0.85
+ACOUSTIC_WEIGHT = 0.15
 
 AI_THRESHOLD = 60
 HUMAN_THRESHOLD = 50
@@ -54,10 +64,7 @@ XAI_LIME_SEGS_F    = 4
 XAI_LIME_SAMPLES   = 64
 XAI_LIME_ALPHA     = 1e-3
 
-# Codec compression penalty config (reduced impact)
 CODEC_HF_RATIO_THRESHOLD    = 0.02
-CODEC_NEURAL_PENALTY        = 0.05
-CODEC_SCORE_DISCOUNT        = 0.95
 
 GENRE_MODEL_PRIMARY   = "dima806/music_genres_classification"
 GENRE_MODEL_SECONDARY = "mtg-upf/discogs-maest-10s-pw-129e"
@@ -67,15 +74,6 @@ GENRE_WIN_SECONDARY   = 10
 GENRE_N_WINDOWS       = 3
 GENRE_TOP_SUBGENRES   = 3
 
-print(f"[*] Configuration:")
-print(f"    Sample rate: {SAMPLE_RATE} Hz")
-print(f"    Hop length: {HOP_LENGTH} samples")
-print(f"    Frames needed: {FRAMES_NEEDED}")
-print(f"    Samples needed: {SAMPLES_NEEDED}")
-print(f"    Duration: {DURATION_SEC} seconds")
-print(f"[*] Weights: Neural={NEURAL_WEIGHT} Acoustic={ACOUSTIC_WEIGHT}")
-print(f"[*] Thresholds: AI>{AI_THRESHOLD}% Human<{HUMAN_THRESHOLD}%")
-print(f"[*] Prob range: {PROB_FLOOR}%-{PROB_CEILING}%, Adjustment cap: ±8%")
 
 GTZAN_PARENT = {
     "blues":"Blues","classical":"Classical","country":"Country","disco":"Electronic",
@@ -97,6 +95,21 @@ def parse_discogs_label(label):
 app = Flask(__name__, static_folder=".")
 CORS(app)
 app.config["MAX_CONTENT_LENGTH"] = 500 * 1024 * 1024
+
+# Use safe JSON encoder so numpy/torch scalars never cause serialization errors
+try:
+    from flask.json.provider import DefaultJSONProvider
+    class _SafeProvider(DefaultJSONProvider):
+        def dumps(self, obj, **kw):
+            kw.setdefault("cls", _SafeEncoder)
+            return _json.dumps(obj, **kw)
+        def loads(self, s, **kw):
+            return _json.loads(s, **kw)
+    app.json_provider_class = _SafeProvider
+    app.json = _SafeProvider(app)
+except ImportError:
+    # Flask < 2.2 fallback
+    app.json_encoder = _SafeEncoder
 
 # ── Model ─────────────────────────────────────────────────────────────────────
 class HybridASTDetector(nn.Module):
@@ -126,181 +139,16 @@ class HybridASTDetector(nn.Module):
         h = self.ast(c).last_hidden_state
         return self.classifier(torch.cat([h[:,0,:], h[:,1:,:].mean(1)], dim=1))
 
-# ══════════════════════════════════════════════════════════════════════════════
-# ── PRINT CLEAR VERDICT FUNCTION ──────────────────────────────────────────────
-# ══════════════════════════════════════════════════════════════════════════════
-
-def print_clear_verdict(verdict, ai_probability, segment_results, weighted_neural, weighted_acoustic, total_adjustment):
-    """Print a highly readable verdict summary."""
-    print("\n" + "=" * 70)
-    print("🎵 AUDIO ANALYSIS RESULT")
-    print("=" * 70)
-    
-    # Clear verdict with emoji
-    if "Human" in verdict:
-        verdict_emoji = "👤 HUMAN"
-        verdict_color = "\033[92m"  # Green
-    elif "AI" in verdict:
-        verdict_emoji = "🤖 AI GENERATED"
-        verdict_color = "\033[91m"  # Red
-    else:
-        verdict_emoji = "❓ NOT SURE"
-        verdict_color = "\033[93m"  # Yellow
-    
-    print(f"\n{verdict_color}╔════════════════════════════════════════════════════════════════╗\033[0m")
-    print(f"{verdict_color}║  FINAL VERDICT: {verdict_emoji:<54} ║\033[0m")
-    
-    # Show probability bar
-    bar_length = 40
-    filled = int(ai_probability / 100 * bar_length)
-    bar = "█" * filled + "░" * (bar_length - filled)
-    print(f"{verdict_color}║  AI PROBABILITY: {ai_probability:>5.1f}%  {bar}  ║\033[0m")
-    
-    human_pct = 100 - ai_probability
-    if ai_probability >= 60:
-        confidence_text = f"⚠️ This is LIKELY AI-GENERATED ({ai_probability:.1f}% confident)"
-    elif human_pct >= 60:
-        confidence_text = f"✓ This is LIKELY HUMAN PERFORMANCE ({human_pct:.1f}% confident)"
-    else:
-        confidence_text = f"❓ UNCLEAR - Could be either AI or human"
-    
-    print(f"{verdict_color}║  {confidence_text:<62} ║\033[0m")
-    print(f"{verdict_color}╚════════════════════════════════════════════════════════════════╝\033[0m")
-    
-    # Segment summary
-    print("\n📊 SEGMENT BREAKDOWN:")
-    print("-" * 60)
-    print(f"  {'':2s} {'SECTION':10s} {'AI %':>8s} {'HUMAN %':>8s} {'VERDICT':12s} {'AGREEMENT':12s}")
-    print(f"  {'─' * 58}")
-    
-    for seg in segment_results:
-        ai_pct = seg["neural_prob"] * 100
-        human_pct_seg = 100 - ai_pct
-        
-        if ai_pct < 40:
-            verdict_seg = "👤 HUMAN"
-        elif ai_pct > 60:
-            verdict_seg = "🤖 AI"
-        else:
-            verdict_seg = "❓ MIXED"
-        
-        corr_text = "✓ AGREES" if seg["corroborated"] else "✗ CONFLICT"
-        print(f"  {corr_text[0]}  {seg['name'].upper():10s} {ai_pct:7.1f}% {human_pct_seg:7.1f}% {verdict_seg:12s} {corr_text:12s}")
-    
-    # Trust indicator
-    print("\n🔍 TRUST INDICATORS:")
-    print("-" * 60)
-    
-    corroborated_count = sum(1 for s in segment_results if s["corroborated"])
-    conflicting_count = len(segment_results) - corroborated_count
-    
-    if corroborated_count >= conflicting_count:
-        print(f"  ✅ {corroborated_count} segment(s) where AI and acoustic analysis AGREE")
-        print(f"  ⚠️ {conflicting_count} segment(s) with CONFLICTING signals")
-        if "Human" in verdict:
-            print("  → System TRUSTS the HUMAN-sounding corroborated segments")
-            print("  → Conflicting AI-sounding segments are IGNORED (no acoustic support)")
-        elif "AI" in verdict:
-            print("  → System TRUSTS the AI-sounding corroborated segments")
-            print("  → Conflicting human-sounding segments are IGNORED")
-    else:
-        print(f"  ⚠️ {conflicting_count} segment(s) with CONFLICTING signals (majority)")
-        print(f"  ✅ {corroborated_count} segment(s) where signals AGREE (minority)")
-        print("  → Using weighted confidence scoring to resolve conflicts")
-    
-    # Scoring breakdown
-    print("\n📈 SCORING BREAKDOWN:")
-    print("-" * 60)
-    print(f"  Neural Network (85% weight):  {weighted_neural*100:5.1f}% AI")
-    print(f"  Acoustic Features (15% weight): {weighted_acoustic*100:5.1f}% AI")
-    print(f"  Adjustment:                     {total_adjustment:+.1f}%")
-    print(f"  {'─' * 40}")
-    print(f"  FINAL AI SCORE:                {ai_probability:5.1f}%")
-    
-    # Simple explanation
-    print("\n💡 SIMPLE EXPLANATION:")
-    print("-" * 60)
-    if "Human" in verdict:
-        if ai_probability <= 30:
-            print("  ✓ This sounds like a REAL HUMAN recording.")
-            print("  ✓ Strong natural characteristics (timing, dynamics, pitch variation)")
-            print("  ✓ Any AI-like sections are not acoustically supported")
-        else:
-            print("  ✓ This likely contains HUMAN PERFORMANCE elements.")
-            print("  ✓ The overall evidence points to human-origin audio")
-            print("  ⚠️ Some sections show AI-like patterns but lack acoustic confirmation")
-    elif "AI" in verdict:
-        print("  🤖 This sounds like AI-GENERATED audio.")
-        print("  🤖 Patterns match synthetic/computer-generated content")
-        if human_pct > 20:
-            print("  ⚠️ Some human-like qualities detected but AI patterns dominate")
-    else:
-        print("  ❓ This is UNCLEAR - could be either AI or human.")
-        print("  ❓ The system needs more confident signals to decide")
-        print("  ❓ Consider uploading a longer or clearer audio sample")
-    
-    print("\n" + "=" * 70 + "\n")
-
-# ══════════════════════════════════════════════════════════════════════════════
-# ── Human Performance Detection (REDUCED IMPACT) ──────────────────────────────
-# ══════════════════════════════════════════════════════════════════════════════
-
-def detect_human_performance(feat_dict):
-    """
-    Detects characteristics that strongly indicate human performance.
-    Returns additive adjustment (reduced impact so it doesn't override neural net).
-    """
-    adjustment = 0.0
-    reasons = []
-    
-    # Reduced adjustments - these were over-correcting before
-    if feat_dict["beat_regularity"] < 0.65:
-        adjustment -= 3.0  # Was -8.0
-        reasons.append("natural timing variations")
-    elif feat_dict["beat_regularity"] < 0.75:
-        adjustment -= 1.5  # Was -4.0
-        reasons.append("slight timing variations")
-    
-    if feat_dict["pitch_stability"] < 0.65:
-        adjustment -= 2.5  # Was -7.0
-        reasons.append("natural pitch variation")
-    elif feat_dict["pitch_stability"] < 0.75:
-        adjustment -= 1.0  # Was -3.0
-        reasons.append("healthy pitch movement")
-    
-    if feat_dict["dynamic_range"] > 0.05:
-        adjustment -= 2.0  # Was -6.0
-        reasons.append("good dynamic range")
-    elif feat_dict["dynamic_range"] > 0.035:
-        adjustment -= 1.0  # Was -3.0
-        reasons.append("natural dynamics")
-    
-    if feat_dict["noise_floor"] > 0.001:
-        adjustment -= 2.0  # Was -5.0
-        reasons.append("natural background presence")
-    elif feat_dict["noise_floor"] > 0.0005:
-        adjustment -= 1.0  # Was -2.0
-    
-    if feat_dict["harmonic_ratio"] < 0.60:
-        adjustment -= 2.0  # Was -6.0
-        reasons.append("organic harmonic content")
-    elif feat_dict["harmonic_ratio"] < 0.70:
-        adjustment -= 1.0  # Was -3.0
-    
-    # Cap the maximum reduction (was -20, now -10)
-    adjustment = max(adjustment, -10.0)
-    
-    return adjustment, reasons
 
 def get_genre_adjustment(genre_name):
     """Return additive adjustment for different genres (reduced impact)."""
     genre_adjustments = {
-        "Electronic": -3.0,   # Was -5.0
-        "Hip-Hop": -2.0,      # Was -4.0
-        "Pop": -2.0,          # Was -3.0
-        "Metal": 1.0,         # Was 2.0
-        "Classical": 1.0,     # Was 3.0
-        "Jazz": 1.0,          # Was 2.0
+        "Electronic": -3.0,
+        "Hip-Hop": -2.0,
+        "Pop": -2.0,
+        "Metal": 1.0,
+        "Classical": 1.0,
+        "Jazz": 1.0,
         "Rock": 0.0,
         "Blues": 0.5,
         "Country": 0.0,
@@ -412,8 +260,6 @@ def prepare_weighted_audio_analysis(waveform, total_duration_sec):
         # Make sure it doesn't overlap with intro or chorus
         if len(segments) >= 2:
             chorus_start_sec = segments[1][3]
-            chorus_end_sec = segments[1][4]
-            # If verse would overlap chorus, shift to 70% instead
             if abs(verse_target - chorus_start_sec) < clip_sec:
                 verse_target = dur * 0.70
         verse_start = max(clip_sec + 1, verse_target)
@@ -468,10 +314,9 @@ def analyze_weighted_segments(waveform, total_duration_sec, model, mel_transform
         neural_says_human = neural_prob < 0.5
         acoustic_says_human = human_score > 60
         corroborated = neural_says_human == acoustic_says_human
-        
-        # Evidence quality: neural confidence × corroboration bonus
+
         evidence_quality = confidence * (1.15 if corroborated else 0.85)
-        
+
         segment_results.append({
             "name": seg_name,
             "weight": weight,
@@ -486,10 +331,7 @@ def analyze_weighted_segments(waveform, total_duration_sec, model, mel_transform
             "start_sec": round(start_sec, 2),
             "end_sec": round(end_sec, 2)
         })
-        
-        corr_str = "✓ corroborated" if corroborated else "✗ conflicting"
-        print(f"  Segment [{seg_name}] {start_sec:.1f}-{end_sec:.1f}s: neural={neural_prob:.1%}, acoustic={acoustic_prob:.1%}, human={human_score:.0f}, conf={confidence:.2f}, {corr_str}")
-    
+
     # ── Aggregation Strategy ──
     # Weight by: segment importance weight × neural confidence × evidence quality
     # This naturally favors the chorus (weight=1.5) and segments where
@@ -526,14 +368,12 @@ def analyze_weighted_segments(waveform, total_duration_sec, model, mel_transform
             corr_neural = np.mean([s["neural_prob"] for s in corroborated_segs])
             blend_factor = min(0.35, (neural_std - 0.20) * 1.5)
             weighted_neural = weighted_neural * (1 - blend_factor) + corr_neural * blend_factor
-            print(f"  High disagreement (std={neural_std:.3f}): boosting {len(corroborated_segs)} corroborated segment(s) by {blend_factor:.1%}")
         else:
             # All segments are either corroborated or uncorroborated — 
             # lean toward the most confident one
             best_conf_seg = max(segment_results, key=lambda s: s["confidence"])
             blend_factor = min(0.25, (neural_std - 0.20) * 1.0)
             weighted_neural = weighted_neural * (1 - blend_factor) + best_conf_seg["neural_prob"] * blend_factor
-            print(f"  High disagreement (std={neural_std:.3f}): leaning {blend_factor:.1%} toward [{best_conf_seg['name']}] (most confident)")
     
     # ── Human-score safety check ──
     # If the MOST human-sounding segment (high human_score + low neural) exists 
@@ -547,7 +387,6 @@ def analyze_weighted_segments(waveform, total_duration_sec, model, mel_transform
             if weighted_neural > 0.65:
                 pull = min(0.12, (weighted_neural - 0.65) * 0.5)
                 weighted_neural -= pull
-                print(f"  Conservatism pull: segment [{min_neural_seg['name']}] has strong human signal (neural={min_neural_seg['neural_prob']:.1%}, human_score={min_neural_seg['human_score']:.0f}), pulling weighted_neural down by {pull:.3f}")
     
     best_segment = max(segment_results, key=lambda s: s["evidence_quality"] * s["weight"])
     
@@ -561,15 +400,7 @@ def compute_calibrated_probability(neural_prob, acoustic_prob, feat_dict, genre_
     """
     Neural network is the primary signal. Acoustic adjustments are small and
     agreement-scaled — they cannot flip a confident neural prediction.
-    
-    Key fixes:
-    - No double-counting of features (human_performance detection removed, 
-      individual feature adjustments handle this)
-    - Adjustments are scaled by (1 - agreement_score) so high-agreement segments
-      get minimal correction
-    - Total adjustment is hard-capped relative to neural confidence
     """
-    # Neural network is the primary signal (80% weight)
     base_prob = (neural_prob * NEURAL_WEIGHT + acoustic_prob * ACOUSTIC_WEIGHT) * 100
     
     adjustment = 0.0
@@ -580,8 +411,7 @@ def compute_calibrated_probability(neural_prob, acoustic_prob, feat_dict, genre_
     # Beat regularity
     beat_reg = feat_dict["beat_regularity"]
     if beat_reg < 0.60:
-        adj = -(0.60 - beat_reg) * 8
-        adjustment += adj
+        adjustment += -(0.60 - beat_reg) * 8
         human_reasons.append("natural timing variations")
     elif beat_reg > 0.93:
         adjustment += (beat_reg - 0.93) * 12
@@ -589,8 +419,7 @@ def compute_calibrated_probability(neural_prob, acoustic_prob, feat_dict, genre_
     # Pitch stability
     pitch_stab = feat_dict["pitch_stability"]
     if pitch_stab < 0.60:
-        adj = -(0.60 - pitch_stab) * 6
-        adjustment += adj
+        adjustment += -(0.60 - pitch_stab) * 6
         human_reasons.append("natural pitch variation")
     elif pitch_stab > 0.93:
         adjustment += (pitch_stab - 0.93) * 10
@@ -624,8 +453,7 @@ def compute_calibrated_probability(neural_prob, acoustic_prob, feat_dict, genre_
         genre_name = genre_result["top"]["label"]
         genre_adj = get_genre_adjustment(genre_name)
         adjustment += genre_adj
-        if abs(genre_adj) > 0.5:
-            print(f"  Genre adjustment: {genre_name} = {genre_adj:+.1f}%")
+
     
     # ── Scale adjustments by disagreement ──
     # When segments agree strongly, trust the neural score more (less adjustment)
@@ -651,8 +479,230 @@ def compute_calibrated_probability(neural_prob, acoustic_prob, feat_dict, genre_
     
     return calibrated, adjustment, human_reasons
 
-# ── XAI deep (unchanged) ─────────────────────────────────────────────────────
-# ══════════════════════════════════════════════════════════════════════════════
+# ── XAI deep ─────────────────────────────────────────────────────────────────
+
+# ── GRAD-CAM ─────────────────────────────────────────────────────────────────
+class GradCAM:
+    """
+    Grad-CAM targeting the last Conv2d in cnn_block2 (the Conv2d(16→1) layer,
+    index 3 in the Sequential). This is the final spatial feature map before
+    the residual add and AST handoff — the ideal hook point for visualising
+    which time-frequency regions drove the classification decision.
+    """
+    def __init__(self, model):
+        self.model      = model
+        self.gradients  = None
+        self.activations = None
+        # cnn_block2 = [Conv2d(32,16), BN, ReLU, Conv2d(16,1), BN, ReLU, MaxPool2d]
+        # Index 3 is the last Conv2d before BN/ReLU/Pool
+        target_layer = model.cnn_block2[3]
+        target_layer.register_forward_hook(self._save_activation)
+        target_layer.register_full_backward_hook(self._save_gradient)
+
+    def _save_activation(self, module, input, output):
+        self.activations = output.detach()
+
+    def _save_gradient(self, module, grad_in, grad_out):
+        self.gradients = grad_out[0].detach()
+
+    def compute(self, mel_input):
+        """
+        Returns a dict with:
+          - heatmap: 2-D list (64 freq bins × 256 time frames), values in [0,1]
+          - top_regions: list of top-5 time-frequency regions by Grad-CAM weight
+          - raw_cam_shape: original spatial shape before upsampling
+        """
+        self.model.eval()
+        x = mel_input.clone().float().requires_grad_(True)
+
+        # Forward — do NOT use torch.no_grad() here
+        logit = self.model(x).squeeze()
+        self.model.zero_grad()
+        logit.backward(torch.ones_like(logit))
+
+        if self.gradients is None or self.activations is None:
+            return {"error": "Grad-CAM hooks did not fire — check target layer index."}
+
+        # Global-average-pool the gradients over spatial dims → per-channel weights
+        weights = self.gradients.mean(dim=(2, 3), keepdim=True)   # (B, C, 1, 1)
+        cam     = (weights * self.activations).sum(dim=1, keepdim=True)  # (B, 1, H, W)
+        cam     = F.relu(cam)
+
+        raw_h, raw_w = cam.shape[2], cam.shape[3]
+
+        # Upsample to mel shape (128 freq × 1024 time)
+        cam_up = F.interpolate(cam, size=(128, 1024), mode='bilinear', align_corners=False)
+        cam_np = cam_up.squeeze().detach().cpu().float().numpy()
+
+        # Normalise to [0, 1]
+        lo, hi = cam_np.min(), cam_np.max()
+        cam_norm = np.zeros_like(cam_np) if (hi - lo) < 1e-12 else (cam_np - lo) / (hi - lo)
+
+        # Top-5 regions: find local maxima in the heatmap
+        # cam_norm shape: (128 freq_bins, 1024 time_frames)
+        # axis=0 averages over freq → (1024,) time importance
+        # axis=1 averages over time → (128,)  freq importance
+        time_imp = cam_norm.mean(axis=0)   # (1024,) — time frame importance
+        freq_imp = cam_norm.mean(axis=1)   # (128,)  — freq bin importance
+        top_t = list(np.argsort(time_imp)[::-1][:5])   # top time frames (0-1023)
+        top_f = list(np.argsort(freq_imp)[::-1][:5])   # top freq bins  (0-127)
+        top_regions = [
+            {
+                "frame_idx": int(t),
+                "time_sec":  round(t * HOP_LENGTH / SAMPLE_RATE, 3),
+                "bin_idx":   int(f),
+                "freq_hz":   round(700 * (10 ** ((2595 * math.log10(1 + 0/700) +
+                              (2595 * math.log10(1 + (SAMPLE_RATE/2)/700) -
+                               2595 * math.log10(1 + 0/700)) * f / 127) / 2595) - 1), 1),
+                "importance": round(float(cam_norm[f, t]), 4),  # cam_norm[freq, time]
+            }
+            for t, f in zip(top_t, top_f)
+        ]
+
+        # ── Vectorized average-pool downsample (no loops) ──
+        # 128×1024 → 64×256 using reshape+mean: 8× smaller, preserves local maxima better
+        # than strided indexing while being fully vectorized.
+        DS_F, DS_T = 64, 256
+        blk_f = cam_norm.shape[0] // DS_F   # 2
+        blk_t = cam_norm.shape[1] // DS_T   # 4
+        # Crop to exact multiple then reshape-mean (all numpy, no Python loops)
+        cam_crop = cam_norm[:DS_F * blk_f, :DS_T * blk_t]
+        cam_small = cam_crop.reshape(DS_F, blk_f, DS_T, blk_t).mean(axis=(1, 3))
+        # Re-normalise after pooling
+        lo2, hi2 = cam_small.min(), cam_small.max()
+        cam_small = np.zeros_like(cam_small) if (hi2 - lo2) < 1e-12 else (cam_small - lo2) / (hi2 - lo2)
+
+        # ── Derive interpretation signals ──
+        peak_importance  = float(time_imp.max())
+        peak_time_sec    = float(top_t[0] * HOP_LENGTH / SAMPLE_RATE) if top_t else 0.0
+        peak_freq_hz     = float(top_regions[0]["freq_hz"]) if top_regions else 0.0
+        time_spread_sec  = float((max(top_t) - min(top_t)) * HOP_LENGTH / SAMPLE_RATE) if len(top_t) > 1 else 0.0
+        freq_spread_hz   = float(max(r["freq_hz"] for r in top_regions) -
+                                 min(r["freq_hz"] for r in top_regions)) if len(top_regions) > 1 else 0.0
+
+        # Classify frequency zone
+        if peak_freq_hz < 300:
+            freq_zone = "sub-bass"
+        elif peak_freq_hz < 1000:
+            freq_zone = "vocal/instrument (bass-mid)"
+        elif peak_freq_hz < 4000:
+            freq_zone = "vocal/instrument (mid-high)"
+        elif peak_freq_hz < 6000:
+            freq_zone = "upper harmonic"
+        else:
+            freq_zone = "synthetic/artifact (high)"
+
+        # Concentration score: how tightly clustered are the hot spots?
+        # Low spread + high peak = concentrated (AI-like)
+        # High spread + low peak = diffuse (human-like)
+        concentration = float(np.clip(peak_importance / max(time_spread_sec + 0.1, 0.1), 0, 10))
+        concentration_label = (
+            "highly concentrated — single-point artifact (strong AI signal)"
+            if concentration > 5 else
+            "moderately concentrated — localised pattern"
+            if concentration > 2 else
+            "diffuse — spread across the track (human-like)"
+        )
+
+        # AI vs Human interpretation
+        ai_signals   = []
+        human_signals = []
+
+        if peak_importance > 0.65:
+            ai_signals.append(f"High peak activation ({peak_importance:.0%}) — network found a strong AI fingerprint")
+        else:
+            human_signals.append(f"Low peak activation ({peak_importance:.0%}) — no dominant AI fingerprint found")
+
+        if time_spread_sec < 0.5 and len(top_t) > 1:
+            ai_signals.append(f"Hyper-concentrated hotspot ({time_spread_sec:.3f}s window) — typical of AI generation artifacts")
+        elif time_spread_sec > 1.0:
+            human_signals.append(f"Activation spread over {time_spread_sec:.1f}s — organic variation across the track")
+
+        if freq_zone == "synthetic/artifact (high)":
+            ai_signals.append(f"Peak at {peak_freq_hz:.0f} Hz — above natural vocal/instrument range, typical of AI synthesis artifacts")
+        elif freq_zone == "upper harmonic":
+            human_signals.append(f"Peak at {peak_freq_hz:.0f} Hz — upper harmonic range, natural for instruments and vocals")
+        elif "vocal" in freq_zone:
+            human_signals.append(f"Peak at {peak_freq_hz:.0f} Hz — within natural vocal/instrument range")
+
+        if freq_spread_hz > 3000:
+            human_signals.append(f"Wide frequency spread ({freq_spread_hz:.0f} Hz) — attention distributed across natural harmonic range")
+        elif freq_spread_hz < 500 and len(top_regions) > 1:
+            ai_signals.append(f"Narrow frequency cluster ({freq_spread_hz:.0f} Hz) — network locked onto a specific synthetic band")
+
+        # Overall pattern verdict — Grad-CAM signals + final verdict as tiebreaker
+        ai_score  = len(ai_signals)
+        hum_score = len(human_signals)
+
+        if ai_score > hum_score and ai_score >= 1:
+            pattern_verdict = "AI-like pattern"
+            pattern_color   = "red"
+        elif hum_score > ai_score and hum_score >= 1:
+            pattern_verdict = "Human-like pattern"
+            pattern_color   = "green"
+        else:
+            pattern_verdict = "Ambiguous pattern"
+            pattern_color   = "amber"
+
+        # Plain-English summary sentence for the UI
+        if pattern_verdict == "AI-like pattern":
+            plain_summary = (
+                f"The network's attention was {concentration_label.split('—')[0].strip()} "
+                f"around {peak_freq_hz:.0f} Hz ({freq_zone}), spanning only {time_spread_sec:.2f}s "
+                f"— a signature consistent with AI-generated synthesis artifacts."
+            )
+        elif pattern_verdict == "Human-like pattern":
+            plain_summary = (
+                f"Activation was broadly spread across {time_spread_sec:.1f}s and "
+                f"{freq_spread_hz:.0f} Hz of frequency range, centred in the {freq_zone} "
+                f"— typical of organic, human-performed audio."
+            )
+        else:
+            plain_summary = (
+                f"Mixed signals: peak activation at {peak_freq_hz:.0f} Hz ({freq_zone}) "
+                f"over {time_spread_sec:.2f}s. Both AI and human patterns are present — "
+                f"the overall verdict relies on additional acoustic evidence."
+            )
+
+        # Frequency zone explanation for non-experts
+        freq_zone_explanations = {
+            "sub-bass":                   "Below 300 Hz — very low rumble/bass region. Anomalies here often relate to low-frequency generation artifacts.",
+            "vocal/instrument (bass-mid)": "300–1 000 Hz — the fundamental range of most vocals and instruments. Activity here is expected in natural music.",
+            "vocal/instrument (mid-high)": "1–4 kHz — upper harmonics and vocal clarity range. AI models sometimes leave subtle patterns in this region.",
+            "upper harmonic":             "4–6 kHz — air and presence band. Common in natural music; activation here is expected for instruments and vocals.",
+            "synthetic/artifact (high)":  "Above 6 kHz — beyond most natural vocal/instrument energy. Strong AI activation here is a red flag for synthesis artifacts.",
+        }
+
+        return {
+            "heatmap":             cam_small.tolist(),   # 64×256 — fast transfer
+            "heatmap_shape":       [DS_F, DS_T],
+            "top_regions":         top_regions,
+            "raw_cam_shape":       [raw_h, raw_w],
+            # ── Interpretation ──
+            "peak_importance":     round(peak_importance, 4),
+            "peak_time_sec":       round(peak_time_sec, 3),
+            "peak_freq_hz":        round(peak_freq_hz, 1),
+            "time_spread_sec":     round(time_spread_sec, 3),
+            "freq_spread_hz":      round(freq_spread_hz, 1),
+            "freq_zone":           freq_zone,
+            "freq_zone_explanation": freq_zone_explanations.get(freq_zone, ""),
+            "concentration":       round(concentration, 3),
+            "concentration_label": concentration_label,
+            "ai_signals":          ai_signals,
+            "human_signals":       human_signals,
+            "pattern_verdict":     pattern_verdict,
+            "pattern_color":       pattern_color,
+            "plain_summary":       plain_summary,
+        }
+
+def _gradcam_singleton(model):
+    """Lazily create a GradCAM instance, recreating it if the model changes."""
+    if (not hasattr(_gradcam_singleton, "_instance") or
+            _gradcam_singleton._model_id != id(model)):
+        _gradcam_singleton._instance = GradCAM(model)
+        _gradcam_singleton._model_id  = id(model)
+    return _gradcam_singleton._instance
+
 
 def _xd_to_numpy(t):
     return t.detach().cpu().float().numpy()
@@ -690,17 +740,22 @@ def _xd_saliency(mel_input, model):
     }
 
 def _xd_integrated_gradients(mel_input, model, n_steps=XAI_IG_STEPS):
+    """Memory-safe Integrated Gradients — one step at a time to avoid OOM."""
     model.eval()
-    x    = mel_input
+    x    = mel_input.float()
     base = torch.zeros_like(x)
-    grads = []
+    # Accumulate gradients as float32 numpy on CPU to keep VRAM flat
+    avg_grads_np = np.zeros(_xd_to_numpy(x).shape, dtype=np.float32)
     for step in range(n_steps + 1):
         interp = (base + (step / n_steps) * (x - base)).requires_grad_(True)
         model(interp).squeeze().backward()
-        grads.append(_xd_to_numpy(interp.grad))
-    avg_grads = np.mean(np.stack(grads, axis=0), axis=0)
-    attrs     = _xd_to_numpy(x - base) * avg_grads
-    attrs_abs = np.abs(attrs).squeeze(0)
+        avg_grads_np += _xd_to_numpy(interp.grad)
+        # Free the computation graph immediately
+        interp.grad = None
+        if x.device.type == "cuda" and step % 10 == 0:
+            torch.cuda.empty_cache()
+    avg_grads_np /= (n_steps + 1)
+    attrs_abs = np.abs(_xd_to_numpy(x - base) * avg_grads_np).squeeze(0)
     fi  = _xd_norm01(attrs_abs.mean(axis=1))
     bi  = _xd_norm01(attrs_abs.mean(axis=0))
     return {
@@ -829,35 +884,46 @@ def compute_xai_deep(mel_input, model, device):
     x = mel_input.to(device)
     with torch.no_grad():
         raw_logit = float(model(x).squeeze().item())
+
+    def _clear():
+        model.zero_grad()
+        if device.type == "cuda":
+            torch.cuda.empty_cache()
+
     out = {}
-    try:    out["saliency"]             = _xd_saliency(x, model)
+    try:
+        _clear()
+        gc = _gradcam_singleton(model)
+        out["gradcam"] = gc.compute(x)
+    except Exception as e: out["gradcam"] = {"error": str(e)}
+    finally: _clear()
+
+    try:
+        out["saliency"] = _xd_saliency(x, model)
     except Exception as e: out["saliency"] = {"error": str(e)}
-    try:    out["integrated_gradients"] = _xd_integrated_gradients(x, model)
+    finally: _clear()
+
+    try:
+        out["integrated_gradients"] = _xd_integrated_gradients(x, model)
     except Exception as e: out["integrated_gradients"] = {"error": str(e)}
-    try:    out["attention"]            = _xd_attention_rollout(x, model)
+    finally: _clear()
+
+    try:
+        out["attention"] = _xd_attention_rollout(x, model)
     except Exception as e: out["attention"] = {"error": str(e)}
-    try:    out["lime"]                 = _xd_lime(x, model)
+    finally: _clear()
+
+    try:
+        out["lime"] = _xd_lime(x, model)
     except Exception as e: out["lime"] = {"error": str(e)}
+    finally: _clear()
+
     out["summary"] = _xd_summary(
         out.get("saliency", {}), out.get("integrated_gradients", {}),
         out.get("attention", {}), out.get("lime", {}),
     )
     return raw_logit, out
-
 # ── Helpers ───────────────────────────────────────────────────────────────────
-def detect_professional_production(feat):
-    conds = [feat["dynamic_range"]<0.04, feat["spectral_flatness"]>0.8, feat["temporal_flux"]<0.8]
-    reasons = [r for r,c in zip(["professional compression","full frequency spectrum","consistent energy"],conds) if c]
-    adjustment = -len(reasons) * 1.0 if len(reasons) >= 2 else 0.0
-    return adjustment, reasons
-
-def clipping_weight(chunk_tensor):
-    cr = float(np.mean(np.abs(chunk_tensor.squeeze().numpy()) >= CLIP_THRESHOLD))
-    if cr <= CLIP_RATIO_SOFT: return 1.0, cr
-    if cr >= CLIP_RATIO_HARD: return CLIP_MIN_WEIGHT, cr
-    t = (cr-CLIP_RATIO_SOFT)/(CLIP_RATIO_HARD-CLIP_RATIO_SOFT)
-    return 1.0 - t*(1.0-CLIP_MIN_WEIGHT), cr
-
 def detect_codec_compression(waveform_tensor, sr=SAMPLE_RATE):
     arr = waveform_tensor.squeeze().numpy().astype(np.float32)
     n   = len(arr)
@@ -1151,15 +1217,23 @@ _AW = {"spectral_flatness":0.13,"dynamic_range":0.13,"tonal_variation":0.12,
 
 def _badge(s): return "AI-like" if s>=55 else ("Human-like" if s<=45 else "Neutral")
 
-def _xfeat(id,label,score,value,wkey,what,why,is_primary=False):
+def _xfeat(id,label,score,value,wkey,what,why,why_verdict="",is_primary=False):
     w = NEURAL_WEIGHT if is_primary else ACOUSTIC_WEIGHT*_AW.get(wkey,0.10)
     return {"id":id,"label":label,"score":max(0,min(100,round(score))),"value":value,
             "badge":_badge(score),"weight":w,"weight_label":f"{round(w*100)}% of final score",
-            "is_primary":is_primary,"what":what,"why":why}
+            "is_primary":is_primary,"what":what,"why":why,"why_verdict":why_verdict}
+
+def _verdict_reason(score, ai_phrases, neutral_phrase, human_phrases):
+    """Return a contextual verdict explanation based on score bucket."""
+    if score >= 65:
+        return ai_phrases[1] if score >= 80 else ai_phrases[0]
+    elif score <= 35:
+        return human_phrases[1] if score <= 20 else human_phrases[0]
+    else:
+        return neutral_phrase
 
 def score_features_for_xai(feat, neural_prob, final_ai_probability=None):
     ns=max(0,min(100,round(neural_prob*100)))
-    nb="AI-like" if ns>=55 else ("Neutral" if ns>=45 else "Human-like")
     nw=(f"Strong AI signal ({ns}%) — primary driver of classification." if ns>=70 else
         f"Leans AI-generated ({ns}%) — main signal." if ns>=55 else
         f"Borderline score ({ns}%) — near the midpoint." if ns>=45 else
@@ -1169,24 +1243,48 @@ def score_features_for_xai(feat, neural_prob, final_ai_probability=None):
          f"{sfv:.3f} — natural balance of tonal content." if sfv<=0.45 else
          f"{sfv:.3f} — higher side, dense mix, or synthesised textures." if sfv<=0.7 else
          f"High ({sfv:.3f}) — near noise-like distribution.")
+    sf_verdict=_verdict_reason(sfs,
+        ["This track's frequency distribution is unusually uniform, a pattern common in AI synthesis where all frequencies are generated at even energy levels.",
+         "Near-flat frequency distribution is a strong AI indicator — real instruments and voices naturally concentrate energy at harmonic peaks, not spread it evenly."],
+        "Frequency distribution sits in a neutral zone — neither strongly tonal nor noise-like, so this feature provides limited evidence either way.",
+        ["Energy is well-concentrated at musical pitches rather than spread evenly, which aligns with real instruments and organic sound sources.",
+         "Highly tonal frequency distribution strongly suggests human performance — acoustic and electric instruments produce tight harmonic peaks that AI models rarely replicate perfectly."])
     drv=feat["dynamic_range"]; drs=dr_score(drv)
     drw=(f"Extremely low ({drv:.4f}) — loudness barely changes." if drv<0.01 else
          f"{drv:.4f} — heavily compressed." if drv<0.03 else
          f"{drv:.4f} — typical range for professionally produced music." if drv<0.08 else
          f"{drv:.4f} — fairly high, noticeable contrast." if drv<0.15 else
          f"Very high ({drv:.4f}) — dramatic loudness swings.")
+    dr_verdict=_verdict_reason(drs,
+        ["Very little loudness variation can indicate AI generation — synthetic audio often lacks the natural breathing and dynamic expression of human performance.",
+         "Extremely flat loudness is a strong AI marker. Human musicians naturally swell, accent, and back off; this track shows almost none of that expressive variation."],
+        "Loudness variation is within the typical range for professionally produced music — this feature alone doesn't distinguish human from AI on this track.",
+        ["The track shows healthy loudness swings consistent with live or expressive human performance — dynamic contrast is a natural byproduct of human musicianship.",
+         "Wide dynamic range is a strong indicator of human performance. AI-generated audio tends to be loudness-normalised; this track's dramatic swings point to organic, expressive playing."])
     scv=feat["spectral_centroid"]; scs=sc_score(scv)
     scw=(f"Near zero ({scv:.4f}) — near-silent or very bass-heavy." if scv<0.02 else
          f"{scv:.4f} — bass/low-mids dominant." if scv<0.08 else
          f"{scv:.4f} — balanced spread." if scv<0.15 else
          f"{scv:.4f} — moderately bright." if scv<0.30 else
          f"High ({scv:.4f}) — predominantly treble-heavy.")
+    sc_verdict=_verdict_reason(scs,
+        ["The spectral brightness pattern is atypical for organic recordings — AI models often generate tracks with an unnaturally skewed tonal centre.",
+         "Strong spectral brightness anomaly detected. This frequency balance is uncommon in both acoustic and typical electronic human productions, nudging toward AI."],
+        "Spectral brightness sits in a neutral zone shared by many music styles — this feature doesn't strongly separate human from AI for this track.",
+        ["Balanced spectral brightness is consistent with a natural mix — human recordings and live instruments tend to occupy the mid-frequency centre of mass.",
+         "Well-centred spectral brightness aligns closely with human music production norms, supporting the human classification."])
     srv=feat["spectral_rolloff"]; srs=sr_score(srv)
     srw=(f"Near zero ({srv:.4f}) — almost no energy above bass." if srv<0.01 else
          f"{srv:.4f} — 85% of energy in deep bass." if srv<0.05 else
          f"{srv:.4f} — typical range, natural treble taper." if srv<0.25 else
          f"{srv:.4f} — moderately high, bright mix." if srv<0.50 else
          f"Very high ({srv:.4f}) — dominant high-frequency content.")
+    sr_verdict=_verdict_reason(srs,
+        ["High-frequency energy distribution here deviates from typical human music — some AI models generate an unnatural high-end emphasis or treble content that doesn't taper naturally.",
+         "Spectral rolloff is strongly atypical — the high-frequency energy pattern is difficult to attribute to normal acoustic or electronic human production."],
+        "High-frequency rolloff is within typical range — this feature is inconclusive for separating AI from human on this track.",
+        ["Spectral rolloff follows a natural high-frequency taper, consistent with how acoustic instruments and professionally mixed human recordings roll off in the high end.",
+         "Very natural treble rolloff pattern — organic instruments and live recordings characteristically show this gradual high-frequency decay, supporting human origin."])
     tfv=feat["temporal_flux"]; tfs2=_score(tfv,[(10,60),(200,54),(2000,44),(8000,48),(30000,52),(1e9,56)])
     tfw=(f"Near-zero ({tfv:,.0f}) — essentially static audio." if tfv<10 else
          f"Low ({tfv:,.0f}) — very slow evolution." if tfv<200 else
@@ -1194,58 +1292,94 @@ def score_features_for_xai(feat, neural_prob, final_ai_probability=None):
          f"Fairly active ({tfv:,.0f}) — dense or percussive music." if tfv<8000 else
          f"High ({tfv:,.0f}) — very energetic." if tfv<30000 else
          f"Extremely high ({tfv:,.0f}) — approaching noise-like behaviour.")
+    tf_verdict=_verdict_reason(tfs2,
+        ["The rate of spectral change between frames is unusually low or high relative to the genre — AI generators can struggle to replicate the organic ebb-and-flow of real musical activity.",
+         "Temporal flux is strongly anomalous. Real music has a characteristic rhythm of change; this track's frame-to-frame variation pattern is harder to explain by human performance."],
+        "Moment-to-moment spectral change falls in a range common to many genres — this feature is not a strong discriminator for this particular track.",
+        ["Spectral change rate follows the natural rhythmic pulse of human music-making — the ebb and flow of energy between frames matches typical live or studio recordings.",
+         "Highly natural temporal flux pattern. The way frequency content evolves frame-to-frame closely mirrors organic human performance dynamics."])
     zcrv=feat["zero_crossing_rate"]; zcrs=_score(zcrv,[(0.02,58),(0.08,50),(0.20,44),(0.40,48),(1,56)])
     zcrw=(f"Very low ({zcrv:.3f}) — smooth, low-frequency dominated." if zcrv<0.05 else
           f"{zcrv:.3f} — typical range." if zcrv<0.15 else
           f"{zcrv:.3f} — moderately high." if zcrv<0.35 else
           f"High ({zcrv:.3f}) — dominant high-frequency or noise-like.")
+    zcr_verdict=_verdict_reason(zcrs,
+        ["Zero-crossing rate deviates from norms for this type of audio — an unusually smooth or noise-saturated waveform can indicate AI synthesis without natural transient character.",
+         "Attack characteristics are strongly anomalous. The waveform's crossing pattern is inconsistent with how human-played or naturally recorded audio typically behaves."],
+        "Zero-crossing rate is in a neutral zone — transient character here is common to both human and AI audio in this genre.",
+        ["Waveform attack pattern is consistent with natural instrumental or vocal recordings — human-played instruments produce transient structures that match this profile.",
+         "Very natural transient character. The rate at which the waveform crosses zero closely mirrors organic acoustic recordings, supporting human performance."])
     nfv=feat["noise_floor"]; nfs=nf_score(nfv)
     nfw=(f"Near-zero ({nfv:.5f}) — perfectly silent gaps." if nfv<0.0002 else
          f"Very low ({nfv:.5f}) — quieter than most real recordings." if nfv<0.001 else
          f"{nfv:.5f} — natural range, consistent with studio noise." if nfv<0.004 else
          f"Moderately elevated ({nfv:.5f}) — noticeable background noise." if nfv<0.015 else
          f"High ({nfv:.5f}) — substantial background noise.")
+    nf_verdict=_verdict_reason(nfs,
+        ["Near-zero or atypically low background noise in the quietest parts of the track is a common AI tell — synthesisers produce mathematically perfect silence between notes, whereas real recordings always capture some ambient sound.",
+         "Background noise floor is suspiciously clean. AI-generated audio often has perfectly silent gaps; real studio recordings and live performances always retain some noise floor from the room, equipment, or environment."],
+        "Background noise floor sits in a neutral range that could belong to either a well-recorded human track or a convincingly rendered AI output — this feature is inconclusive here.",
+        ["A natural noise floor in the quiet parts of the track is consistent with a real recording environment — studios, rooms, and analogue equipment always leave a faint but measurable noise signature.",
+         "Noise floor strongly supports human recording. The residual background level in the quietest segments matches what microphones, preamps, and acoustic environments leave behind — something AI generators rarely simulate accurately."])
     hrv=feat["harmonic_ratio"]; hrs=hr_score(hrv); hrp=round(hrv*100,1)
     hrw=(f"Very high ({hrp}%) — near-perfect harmonic series." if hrv>0.90 else
          f"High ({hrp}%) — most energy in harmonic peaks." if hrv>0.75 else
          f"{hrp}% — natural balance of harmonic peaks and noise." if hrv>0.55 else
          f"{hrp}% — notable noise energy between harmonics." if hrv>0.35 else
          f"Low ({hrp}%) — predominantly noise-like.")
+    hr_verdict=_verdict_reason(hrs,
+        ["An unusually high harmonic purity score can indicate AI synthesis — some generators produce unnaturally clean harmonic series with very little inter-harmonic noise, unlike real instruments which always add resonance and subtle inharmonicity.",
+         "Near-perfect harmonic purity is rare in natural recordings. Human instruments — guitars, voices, pianos — always introduce slight inharmonicity and inter-harmonic noise; this level of tonal cleanliness points toward synthesis."],
+        "Harmonic purity is in a neutral range shared by many genres — this feature does not strongly lean the verdict either way for this track.",
+        ["Harmonic purity with natural inter-harmonic noise is consistent with human performance. Real instruments always produce some energy between harmonics due to resonance, bow noise, breath, or pick attack.",
+         "Low harmonic purity is a natural characteristic of organic instruments and voice — guitar distortion, brass overtones, and vocal breathiness all introduce noise between harmonics in ways AI synthesis rarely replicates."])
     brv=feat["beat_regularity"]; brs=br_score(brv); brp=round(brv*100,1)
     brw=(f"Very high ({brp}%) — near-perfectly metronomic." if brv>0.90 else
          f"High ({brp}%) — very consistent rhythm." if brv>0.75 else
          f"{brp}% — clear pulse with human timing variations." if brv>0.50 else
          f"Low ({brp}%) — considerable timing variation." if brv>0.25 else
          f"Very low ({brp}%) — no clear repeating pulse.")
+    br_verdict=_verdict_reason(brs,
+        ["Near-perfect rhythmic regularity beyond what even the tightest human drummer achieves can be a sign of AI generation or programmed MIDI sequencing rather than live performance.",
+         "Metronomic precision at this level is extremely difficult for human musicians to sustain — the rhythm is consistent to a degree that suggests machine-generated or quantised audio rather than live playing."],
+        "Rhythmic regularity sits in a range typical of both tight human playing and AI — this feature alone cannot decide the verdict for this track.",
+        ["Rhythmic regularity with natural timing drift is a hallmark of human performance — musicians naturally speed up, slow down, and 'breathe' with the music in ways machines don't.",
+         "Highly irregular timing is a strong human indicator. Human performers naturally rush fills, lay back on grooves, and deviate from a perfect grid in ways that are very hard for AI to authentically replicate."])
     psv=feat["pitch_stability"]; pss=ps_score(psv); psp=round(psv*100,1)
     psw=(f"Very high ({psp}%) — pitch barely moves." if psv>0.92 else
          f"High ({psp}%) — very consistent pitch." if psv>0.80 else
          f"{psp}% — natural range, moderate variation." if psv>0.60 else
          f"Moderate-low ({psp}%) — significant pitch variation." if psv>0.40 else
          f"Low ({psp}%) — dominant pitch varies widely.")
+    ps_verdict=_verdict_reason(pss,
+        ["Pitch stability beyond normal human range can indicate AI synthesis — perfectly locked pitch without vibrato, portamento, or subtle drift is uncommon in live vocal or instrumental performance.",
+         "Near-static pitch is difficult to produce naturally. Human singers and instrumentalists always introduce micro-variation; this level of pitch lock suggests synthesised or heavily pitch-corrected audio."],
+        "Pitch stability is in a neutral range — this feature sits between what might be expected of a tightly performed human track and a normally generated AI output.",
+        ["Natural pitch movement across the track — the amount of variation here is consistent with live vocal or instrumental performance, where vibrato, slides, and melodic drift are expected.",
+         "Wide pitch variation is a strong indicator of expressive human performance. AI generators tend to produce more stable, locked pitch; this level of movement points to organic, human musicianship."])
     feats=[
         _xfeat("neural_score","Neural spectrogram score",ns,f"{neural_prob:.3f}","neural",
-               "The deep neural network is the primary classifier.",nw,is_primary=True),
+               "The deep neural network is the primary classifier.",nw,"",is_primary=True),
         _xfeat("spectral_flatness","Frequency distribution",sfs,f"{sfv:.3f}","spectral_flatness",
-               "Whether energy is concentrated at specific musical pitches (tonal) or spread evenly.",sfw),
+               "Whether energy is concentrated at specific musical pitches (tonal) or spread evenly.",sfw,sf_verdict),
         _xfeat("dynamic_range","Loudness variation",drs,f"{drv:.4f}","dynamic_range",
-               "How much loudness changes moment-to-moment.",drw),
+               "How much loudness changes moment-to-moment.",drw,dr_verdict),
         _xfeat("tonal_variation","Tonal brightness",scs,f"{scv:.4f}","tonal_variation",
-               "Where the spectral 'centre of mass' sits.",scw),
+               "Where the spectral 'centre of mass' sits.",scw,sc_verdict),
         _xfeat("harmonic_movement","High-frequency activity",srs,f"{srv:.4f}","harmonic_movement",
-               "The frequency below which 85% of energy sits.",srw),
+               "The frequency below which 85% of energy sits.",srw,sr_verdict),
         _xfeat("section_consistency","Moment-to-moment change",tfs2,f"{tfv:,.0f}","section_consistency",
-               "How rapidly frequency content changes frame-to-frame.",tfw),
+               "How rapidly frequency content changes frame-to-frame.",tfw,tf_verdict),
         _xfeat("transient_character","Attack sharpness",zcrs,f"{zcrv:.3f}","transient_character",
-               "How often the waveform crosses zero per second.",zcrw),
+               "How often the waveform crosses zero per second.",zcrw,zcr_verdict),
         _xfeat("noise_floor","Background noise floor",nfs,f"{nfv:.5f}","noise_floor",
-               "The amplitude level during the quietest 10% of the track.",nfw),
+               "The amplitude level during the quietest 10% of the track.",nfw,nf_verdict),
         _xfeat("harmonic_ratio","Harmonic purity",hrs,f"{hrp}%","harmonic_ratio",
-               "The proportion of energy at distinct harmonic frequencies.",hrw),
+               "The proportion of energy at distinct harmonic frequencies.",hrw,hr_verdict),
         _xfeat("beat_regularity","Rhythmic regularity",brs,f"{brp}%","beat_regularity",
-               "How metronomically consistent the rhythm is.",brw),
+               "How metronomically consistent the rhythm is.",brw,br_verdict),
         _xfeat("pitch_stability","Pitch consistency",pss,f"{psp}%","pitch_stability",
-               "How consistently the dominant pitch holds its frequency.",psw),
+               "How consistently the dominant pitch holds its frequency.",psw,ps_verdict),
     ]
     primary=[f for f in feats if f["is_primary"]]
     secondary=sorted([f for f in feats if not f["is_primary"]],key=lambda x:x["score"],reverse=True)
@@ -1261,11 +1395,6 @@ def _interp_label(val, breakpoints):
         if val < thr:
             return lbl
     return breakpoints[-1][1]
-
-def _make_signal(score, weight=1.0, direction="ai", note=""):
-    """Helper to build a signal entry for AI/Human indicator lists."""
-    return {"score": round(score, 1), "weight": round(weight, 2),
-            "direction": direction, "note": note}
 
 def compute_acoustic_deep_analysis(feat, genre_result=None, segment_results=None,
                                    neural_prob=None, ai_probability=None, verdict=None):
@@ -1388,7 +1517,6 @@ def compute_acoustic_deep_analysis(feat, genre_result=None, segment_results=None
     }
 
     # ── 3. DYNAMIC RANGE & LOUDNESS VARIATION ────────────────────────────────
-    dr_pct = round(dr_val * 100, 3)
     dynamics_label = _interp_label(dr_val, [
         (0.005, "Extremely compressed — almost zero dynamic contrast"),
         (0.015, "Heavily limited — typical loud-mastered pop/EDM"),
@@ -1602,7 +1730,6 @@ def compute_acoustic_deep_analysis(feat, genre_result=None, segment_results=None
     # Artistic identity consistency across segments
     if segment_results and len(segment_results) >= 2:
         seg_neural = [s["neural_prob"] for s in segment_results]
-        seg_acoustic= [s.get("acoustic_prob", 0.5) for s in segment_results]
         identity_cv = round(float(np.std(seg_neural) / (np.mean(seg_neural) + 1e-6)) * 100, 1)
         identity_label = _interp_label(identity_cv, [
             (8,  "Highly consistent identity — uniform character across track"),
@@ -1842,25 +1969,48 @@ def compute_acoustic_deep_analysis(feat, genre_result=None, segment_results=None
 
 
 def derive_verdict(p):
-    if p >= 75:
+    """Classify AI probability into a verdict label.
+    Uses AI_THRESHOLD (60) and HUMAN_THRESHOLD (50) so thresholds are consistent
+    with config constants. Gap 50-60 = Not Sure zone.
+    """
+    if p >= 80:
         return "Likely AI-generated", f"Strong AI patterns detected ({p:.1f}%)"
-    elif p >= 60:          # Changed from 55 to 60
+    elif p >= AI_THRESHOLD:   # >= 60
         return "Likely AI-generated", f"Patterns lean toward AI generation ({p:.1f}%)"
-    elif p <= 25:
+    elif p <= 20:
         return "Likely Human", f"Strong human characteristics detected ({100-p:.1f}% human)"
-    elif p <= 50:          # Changed from 45 to 50
+    elif p <= HUMAN_THRESHOLD:  # <= 50
         return "Likely Human", f"Patterns lean toward human performance ({100-p:.1f}% human)"
     else:
-        return "Not Sure", f"Signal is ambiguous — could be AI or human ({p:.1f}%)"
+        # 51–59: genuine ambiguous zone between the two thresholds
+        return "Not Sure", f"Signal is ambiguous — borderline result ({p:.1f}%)"
 
 # ── Load models ───────────────────────────────────────────────────────────────
+model = None
+MODEL_LOAD_ERROR = None
+
 print(f"[*] Loading AI detection model on {device}...")
-ast_backbone=ASTModel.from_pretrained("MIT/ast-finetuned-audioset-10-10-0.4593")
-model=HybridASTDetector(ast_backbone).to(device)
-if not os.path.exists(CHECKPOINT_PATH): raise FileNotFoundError(f"Checkpoint not found: {CHECKPOINT_PATH}")
-ckpt=torch.load(CHECKPOINT_PATH,map_location=device)
-model.load_state_dict(ckpt["model_state_dict"]); model.eval()
-print(f"[✓] AI detector loaded — epoch={ckpt.get('epoch',0)+1}  val_acc={ckpt.get('val_acc',0):.2%}  device={device}")
+try:
+    ast_backbone = ASTModel.from_pretrained("MIT/ast-finetuned-audioset-10-10-0.4593")
+    model = HybridASTDetector(ast_backbone).to(device)
+    if not os.path.exists(CHECKPOINT_PATH):
+        raise FileNotFoundError(
+            f"Checkpoint not found: {CHECKPOINT_PATH}. "
+            "Place best_model.pth in the same directory as app.py."
+        )
+    try:
+        ckpt = torch.load(CHECKPOINT_PATH, map_location=device, weights_only=True)
+    except TypeError:
+        ckpt = torch.load(CHECKPOINT_PATH, map_location=device)
+    if "model_state_dict" not in ckpt:
+        raise KeyError(f"Checkpoint missing 'model_state_dict'. Keys: {list(ckpt.keys())}")
+    model.load_state_dict(ckpt["model_state_dict"])
+    model.eval()
+    print(f"[\u2713] AI detector loaded — epoch={ckpt.get('epoch',0)+1}  val_acc={ckpt.get('val_acc',0):.2%}  device={device}")
+except Exception as _e:
+    MODEL_LOAD_ERROR = str(_e)
+    model = None
+    print(f"[\u2717] AI detector failed to load: {_e}")
 
 print(f"[*] Loading primary genre classifier ({GENRE_MODEL_PRIMARY})...")
 try:
@@ -1920,13 +2070,11 @@ def _make_previews(wav_path, duration_sec, clip_sec=PREVIEW_CLIP_SEC):
         }
     try:
         concat_file = os.path.join(PREVIEW_DIR, f"{base}_concat_list.txt")
-        segment_files = []
         with open(concat_file, "w") as f:
             for label, start, seg_dur in segments:
                 if seg_dur <= 0: continue
                 seg_filename = f"{base}__{label}_{int(seg_dur*100)}ms.wav"
                 seg_path = os.path.join(PREVIEW_DIR, seg_filename)
-                segment_files.append(seg_path)
                 if not os.path.exists(seg_path):
                     subprocess.run(["ffmpeg", "-y", "-i", wav_path,
                                     "-ss", str(round(start, 3)), "-t", str(round(seg_dur, 3)),
@@ -2002,7 +2150,7 @@ def report():
 # ── Natural-language summary generator ──────────────────────────────────────
 def generate_nl_explanation(
     verdict, ai_probability, neural_prob, acoustic_prob,
-    shap_acoustic, segment_importance, feat_dict, genre=None, human_score=None, adjustment=None
+    feat_dict, genre=None, human_score=None, adjustment=None
 ):
     pct = round(ai_probability, 1)
     lines = []
@@ -2033,9 +2181,10 @@ def generate_nl_explanation(
 
     return " ".join(lines)
 
-# ── /classify (FIXED - Neural dominant) ───────────────────────────────────────
 @app.route("/classify", methods=["POST"])
 def classify():
+    if model is None:
+        return jsonify({"error": f"Model not loaded: {MODEL_LOAD_ERROR}"}), 503
     files = request.files.getlist("files")
     if not files or files[0].filename == "":
         return jsonify({"error": "No files uploaded."}), 400
@@ -2046,11 +2195,11 @@ def classify():
         if ext not in SUPPORTED_EXTS:
             results.append({"filename": filename, "error": f"Unsupported format: {ext}"})
             continue
+        tmp_path = None
         with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
             tmp_path = tmp.name
             f.save(tmp_path)
         try:
-            print(f"\n{'='*60}\n[→] {filename}\n{'='*60}")
             wav_path, total_secs = convert_to_16k_wav(tmp_path, original_filename=filename)
             if not os.path.exists(wav_path):
                 raise FileNotFoundError(f"WAV not created: {wav_path}")
@@ -2060,47 +2209,34 @@ def classify():
                 waveform = torchaudio.transforms.Resample(sr, SAMPLE_RATE)(waveform)
                 sr = SAMPLE_RATE
 
-            # Use weighted segment analysis
             weighted_neural, weighted_acoustic, agreement_score, segment_results, best_segment = analyze_weighted_segments(
                 waveform, total_secs, model, mel_transform, device
             )
 
-            # Get features from the best segment
             chunk_feat = best_segment["features"]
-            
-            # Get genre classification
+
             genre_result = None
             if GENRE_AVAILABLE:
                 genre_result = classify_genre(waveform)
-                if genre_result and genre_result.get("top"):
-                    print(f"  Genre: {genre_result['top']['label']} ({genre_result['top']['score']:.1f}%)")
-            
-            # Detect codec compression
+
             sample_for_codec = waveform[:, :min(SAMPLES_NEEDED, waveform.shape[1])]
-            is_compressed, hf_ratio, codec_conf, codec_details = detect_codec_compression(sample_for_codec, SAMPLE_RATE)
-            
-            # Calculate calibrated probability (neural dominant now)
+            is_compressed, _, codec_conf, _ = detect_codec_compression(sample_for_codec, SAMPLE_RATE)
+
             ai_probability, total_adjustment, human_reasons = compute_calibrated_probability(
                 weighted_neural, weighted_acoustic, chunk_feat, genre_result, agreement_score
             )
-            
-            # Apply codec penalty (small)
-            codec_penalty_info = {}
+
             if is_compressed:
-                ai_probability, codec_penalty_info = apply_codec_penalty(ai_probability, is_compressed, codec_conf)
-                print(f"  Codec penalty: applied -> {ai_probability:.1f}%")
-            
-            # Determine verdict
+                ai_probability, _ = apply_codec_penalty(ai_probability, is_compressed, codec_conf)
+
             verdict, verdict_explanation = derive_verdict(ai_probability)
-            
-            # Compute human likelihood score (for display only)
+
             human_likelihood_score = compute_human_likelihood_score(chunk_feat)
             
             # XAI deep
             run_xai_deep = request.form.get("xai_deep", "false").lower() == "true"
             xai_deep = None
             if run_xai_deep:
-                best_segment_waveform = None
                 if best_segment["name"] == "chorus":
                     start_sample = int(best_segment["start_sec"] * SAMPLE_RATE)
                     end_sample = int(best_segment["end_sec"] * SAMPLE_RATE)
@@ -2115,13 +2251,45 @@ def classify():
                 
                 best_mel = mel_from_chunk(best_segment_waveform, mel_transform)
                 _, xai_deep = compute_xai_deep(best_mel, model, device)
+                # Align Grad-CAM pattern_verdict with the final model verdict
+                if xai_deep and "gradcam" in xai_deep and xai_deep["gradcam"] and "pattern_verdict" in xai_deep["gradcam"]:
+                    gc_data  = xai_deep["gradcam"]
+                    ai_sig   = len(gc_data.get("ai_signals", []))
+                    hum_sig  = len(gc_data.get("human_signals", []))
+                    # Final verdict carries 2 extra votes as a strong tiebreaker
+                    if "AI" in verdict:
+                        ai_sig  += 2
+                    elif "Human" in verdict:
+                        hum_sig += 2
+                    if ai_sig > hum_sig:
+                        gc_data["pattern_verdict"] = "AI-like pattern"
+                        gc_data["pattern_color"]   = "red"
+                        gc_data["plain_summary"]   = (
+                            f"The neural network found AI-like spectral patterns. "
+                            f"Peak activation at {gc_data.get('peak_freq_hz', 0):.0f} Hz "
+                            f"({gc_data.get('freq_zone', '—')}) over "
+                            f"{gc_data.get('time_spread_sec', 0):.2f}s — "
+                            f"consistent with the AI-generated verdict."
+                        )
+                    elif hum_sig > ai_sig:
+                        gc_data["pattern_verdict"] = "Human-like pattern"
+                        gc_data["pattern_color"]   = "green"
+                        gc_data["plain_summary"]   = (
+                            f"Activation was broadly spread across "
+                            f"{gc_data.get('time_spread_sec', 0):.1f}s and "
+                            f"{gc_data.get('freq_spread_hz', 0):.0f} Hz of frequency range, "
+                            f"centred in the {gc_data.get('freq_zone', '—')} "
+                            f"— typical of organic, human-performed audio."
+                        )
+                    else:
+                        gc_data["pattern_verdict"] = "Ambiguous pattern"
+                        gc_data["pattern_color"]   = "amber"
 
             # Natural-language explanation
             nl_explanation = generate_nl_explanation(
                 verdict, ai_probability, weighted_neural, weighted_acoustic,
-                None, None, chunk_feat, genre_result, human_likelihood_score, total_adjustment
+                chunk_feat, genre_result, human_likelihood_score, total_adjustment
             )
-            print(f"  [nl] {nl_explanation[:120]}…")
 
             # Feature scores
             xai_feats = score_features_for_xai(chunk_feat, weighted_neural, ai_probability)
@@ -2131,14 +2299,12 @@ def classify():
                 acoustic_deep = compute_acoustic_deep_analysis(
                     feat=chunk_feat,
                     genre_result=genre_result,
-                    segment_results=segment_results,
+                    segment_results=safe_segs,
                     neural_prob=weighted_neural,
                     ai_probability=ai_probability,
                     verdict=verdict,
                 )
-                print(f"  [acoustic_deep] signals: AI={acoustic_deep['signal_balance']['ai_signal_count']} Human={acoustic_deep['signal_balance']['human_signal_count']}")
             except Exception as e:
-                print(f"  [acoustic_deep] Error: {e}")
                 acoustic_deep = {"error": str(e)}
 
             # Genre response
@@ -2148,24 +2314,26 @@ def classify():
                      if genre_result else {"top": None, "all": None, "top_subgenre": None, "sources": [], "window_count": 0, "stability": 0, "confidence_note": "", "primary_used": False, "secondary_used": False}),
                   "subgenres": genre_result.get("subgenres", {}) if genre_result else {}}
 
-            # ================================================================
-            # PRINT CLEAR VERDICT (MODIFIED SECTION)
-            # ================================================================
-            print(f"\n  📊 Detailed Analysis:")
-            print(f"  {'─' * 50}")
-            for seg in segment_results:
-                corr_mark = "✓ AGREES" if seg["corroborated"] else "✗ CONFLICT"
-                print(f"  {seg['name'].upper():8s} | AI: {seg['neural_prob']*100:5.1f}% | Acoustic: {seg['acoustic_prob']*100:5.1f}% | {corr_mark}")
 
-            print(f"\n  🧠 Weighted Result:")
-            print(f"     Neural Network (85% weight): {weighted_neural*100:5.1f}% AI")
-            print(f"     Acoustic Features (15% weight): {weighted_acoustic*100:5.1f}% AI")
-            print(f"     Adjustment: {total_adjustment:+.1f}%")
-            print(f"     {'─' * 40}")
-            print(f"     FINAL AI SCORE: {ai_probability:5.1f}%")
-            
-            # Call the clear verdict display function
-            print_clear_verdict(verdict, ai_probability, segment_results, weighted_neural, weighted_acoustic, total_adjustment)
+            # Sanitize segment_results for JSON serialization
+            def _sanitize_seg(s):
+                return {
+                    "name":            s["name"],
+                    "weight":          float(s["weight"]),
+                    "effective_weight":float(s.get("effective_weight", s["weight"])),
+                    "neural_prob":     float(s["neural_prob"]),
+                    "acoustic_prob":   float(s["acoustic_prob"]),
+                    "human_score":     float(s["human_score"]),
+                    "confidence":      float(s["confidence"]),
+                    "evidence_quality":float(s["evidence_quality"]),
+                    "corroborated":    bool(s["corroborated"]),
+                    "raw_logit":       float(s["raw_logit"]),
+                    "start_sec":       float(s["start_sec"]),
+                    "end_sec":         float(s["end_sec"]),
+                    # include key features but cast to Python float
+                    "features": {k: float(v) for k, v in s.get("features", {}).items()},
+                }
+            safe_segs = [_sanitize_seg(s) for s in segment_results]
 
             results.append({
                 "original_filename": filename,
@@ -2185,7 +2353,7 @@ def classify():
                 "analysis_frames": FRAMES_NEEDED,
                 "analysis_mode": "weighted_segments_v2_majority_vote",
                 "segment_analysis": {
-                    "segments": segment_results,
+                    "segments": safe_segs,
                     "best_segment": best_segment["name"],
                     "agreement_score": round(agreement_score, 3),
                     "weighted_neural": round(weighted_neural, 4),
@@ -2208,18 +2376,13 @@ def classify():
                 },
                 "genre": gp,
                 "score_breakdown": {
+                    "neural_weight_pct": round(NEURAL_WEIGHT * 100),
+                    "acoustic_weight_pct": round(ACOUSTIC_WEIGHT * 100),
                     "neural_contribution": round(weighted_neural * NEURAL_WEIGHT * 100, 1),
                     "acoustic_contribution": round(weighted_acoustic * ACOUSTIC_WEIGHT * 100, 1),
-                    "adjustment": round(total_adjustment, 1),
-                    "neural_raw": round(weighted_neural, 4),
-                    "acoustic_raw": round(weighted_acoustic, 4),
-                    "agreement_score": round(agreement_score, 3),
                     "codec_compression": {
                         "detected": is_compressed,
-                        "hf_ratio": round(hf_ratio, 5),
                         "confidence": round(codec_conf, 3),
-                        "details": codec_details,
-                        **codec_penalty_info,
                     },
                 },
                 "diagnostics": {
@@ -2234,18 +2397,9 @@ def classify():
             traceback.print_exc()
             results.append({"filename": filename, "error": str(e)})
         finally:
-            if os.path.exists(tmp_path):
+            if tmp_path and os.path.exists(tmp_path):
                 os.unlink(tmp_path)
     return jsonify({"results": results})
 
 if __name__ == "__main__":
-    print(f"\n{'='*60}")
-    print(f"[*] SoundScan — http://localhost:5000")
-    print(f"[*] AI threshold: {AI_THRESHOLD}%")
-    print(f"[*] Human threshold: {HUMAN_THRESHOLD}%")
-    print(f"[*] Weights: Neural={NEURAL_WEIGHT} Acoustic={ACOUSTIC_WEIGHT}")
-    print(f"[*] Analysis mode: Neural-dominant weighted segments v2")
-    print(f"[*] Segment aggregation: Majority-vote outlier filtering + energy-based chorus")
-    print(f"[*] Adjustment cap: ±8% max, agreement-scaled")
-    print(f"{'='*60}\n")
     app.run(host="0.0.0.0", port=5000, debug=False)
