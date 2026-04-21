@@ -425,9 +425,170 @@ body{font-family:'DM Sans',sans-serif;background:var(--page);color:var(--txt);di
 .gradcam-region-lbl{font-family:var(--mono);font-size:9.5px;color:var(--mut);letter-spacing:0.01em;}
 .gradcam-region-val{font-family:'Plus Jakarta Sans',sans-serif;font-size:11px;font-weight:800;color:var(--txt);letter-spacing:-0.01em;}
 .gradcam-note{margin-top:12px;font-family:'DM Sans',sans-serif;font-size:11px;color:var(--mut);line-height:1.7;font-weight:400;padding:10px 13px;background:rgba(109,40,217,0.04);border-left:3px solid rgba(109,40,217,0.25);border-radius:0 8px 8px 0;}
+
+/* ── LOADING OVERLAY ──────────────────────────────────────── */
+#loading-overlay{
+  position:fixed;inset:0;z-index:8000;
+  background:rgba(10,20,15,0.78);backdrop-filter:blur(10px);
+  display:flex;align-items:center;justify-content:center;
+  opacity:0;pointer-events:none;
+  transition:opacity 0.28s ease;
+}
+#loading-overlay.on{opacity:1;pointer-events:all;}
+.lo-card{
+  background:#fff;border-radius:24px;width:100%;max-width:380px;
+  box-shadow:0 40px 100px rgba(0,0,0,0.35),0 0 0 1px rgba(255,255,255,0.06);
+  padding:36px 30px 30px;
+  display:flex;flex-direction:column;align-items:center;gap:0;
+  transform:translateY(20px) scale(0.96);
+  transition:transform 0.32s cubic-bezier(0.22,1,0.36,1);
+}
+#loading-overlay.on .lo-card{transform:translateY(0) scale(1);}
+.lo-ring-wrap{position:relative;width:100px;height:100px;margin-bottom:20px;flex-shrink:0;}
+.lo-ring-svg{width:100px;height:100px;transform:rotate(-90deg);}
+.lo-ring-bg{fill:none;stroke:#e8eeeb;stroke-width:7;}
+.lo-ring-prog{
+  fill:none;stroke:url(#lo-grad);stroke-width:7;
+  stroke-linecap:round;
+  stroke-dasharray:270;stroke-dashoffset:270;
+  transition:stroke-dashoffset 0.65s cubic-bezier(0.22,1,0.36,1);
+}
+.lo-ring-center{
+  position:absolute;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:1px;
+}
+.lo-pct-num{
+  font-family:'Plus Jakarta Sans',sans-serif;font-size:26px;font-weight:800;
+  color:var(--txt);letter-spacing:-0.05em;line-height:1;
+}
+.lo-pct-sym{
+  font-family:'Plus Jakarta Sans',sans-serif;font-size:11px;font-weight:700;
+  color:var(--mut);line-height:1;
+}
+.lo-bar-wrap{
+  width:100%;height:4px;background:#eaeeec;border-radius:99px;
+  overflow:hidden;margin-bottom:20px;
+}
+.lo-bar-fill{
+  height:100%;border-radius:99px;width:0%;
+  background:linear-gradient(90deg,#17a870,#0d8a5c);
+  transition:width 0.65s cubic-bezier(0.22,1,0.36,1);
+}
+.lo-title{
+  font-family:'Syne',sans-serif;font-size:16px;font-weight:800;
+  color:var(--txt);letter-spacing:-0.03em;margin-bottom:4px;text-align:center;
+}
+.lo-file{
+  font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--mut);
+  max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  text-align:center;margin-bottom:20px;
+}
+.lo-steps{width:100%;display:flex;flex-direction:column;gap:7px;}
+.lo-step{
+  display:flex;align-items:center;gap:10px;
+  padding:8px 11px;border-radius:10px;
+  border:1.5px solid var(--brd);background:#f9fbfa;
+  transition:border-color 0.35s,background 0.35s,transform 0.25s;
+}
+.lo-step.active{
+  border-color:rgba(23,168,112,0.55);background:rgba(23,168,112,0.06);
+  transform:translateX(2px);
+}
+.lo-step.done{border-color:rgba(23,168,112,0.2);background:rgba(23,168,112,0.02);}
+.lo-step-num{
+  font-family:'Plus Jakarta Sans',sans-serif;font-size:10px;font-weight:800;
+  width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  background:#e8eeeb;color:var(--faint);flex-shrink:0;
+  transition:background 0.3s,color 0.3s;
+}
+.lo-step.active .lo-step-num{background:var(--g);color:#fff;}
+.lo-step.done .lo-step-num{background:rgba(23,168,112,0.15);color:var(--g);}
+.lo-step-lbl{
+  font-family:'DM Sans',sans-serif;font-size:11.5px;font-weight:500;
+  color:var(--faint);flex:1;transition:color 0.3s;
+}
+.lo-step.active .lo-step-lbl{color:var(--txt);font-weight:600;}
+.lo-step.done .lo-step-lbl{color:var(--mut);}
+.lo-step-pct{
+  font-family:'Plus Jakarta Sans',sans-serif;font-size:10px;font-weight:800;
+  color:var(--faint);opacity:0;transition:opacity 0.25s,color 0.25s;min-width:28px;text-align:right;
+}
+.lo-step.done .lo-step-pct{opacity:1;color:var(--g);}
+.lo-step.active .lo-step-pct{opacity:1;color:var(--g);}
+.lo-footer{
+  display:flex;align-items:center;justify-content:space-between;
+  width:100%;margin-top:16px;
+}
+.lo-eta{
+  font-size:10.5px;color:var(--faint);
+  font-family:'JetBrains Mono',monospace;letter-spacing:0.02em;
+}
+.lo-status-dot{
+  width:6px;height:6px;border-radius:50%;background:var(--g);
+  animation:lo-blink 1.1s ease-in-out infinite;flex-shrink:0;
+}
+@keyframes lo-blink{0%,100%{opacity:1;}50%{opacity:0.3;}}
 </style>
 </head>
 <body>
+
+<!-- LOADING OVERLAY -->
+<div id="loading-overlay">
+  <div class="lo-card">
+    <!-- SVG progress ring -->
+    <div class="lo-ring-wrap">
+      <svg class="lo-ring-svg" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="lo-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color="#17a870"/>
+            <stop offset="100%" stop-color="#0d8a5c"/>
+          </linearGradient>
+        </defs>
+        <circle class="lo-ring-bg" cx="50" cy="50" r="43"/>
+        <circle class="lo-ring-prog" id="lo-ring-prog" cx="50" cy="50" r="43"/>
+      </svg>
+      <div class="lo-ring-center">
+        <span class="lo-pct-num" id="lo-pct-num">0</span>
+        <span class="lo-pct-sym">%</span>
+      </div>
+    </div>
+    <div class="lo-title">Analyzing Track</div>
+    <div class="lo-file" id="lo-filename">—</div>
+    <!-- thin progress bar -->
+    <div class="lo-bar-wrap"><div class="lo-bar-fill" id="lo-bar-fill"></div></div>
+    <div class="lo-steps">
+      <div class="lo-step" id="lo-s1">
+        <div class="lo-step-num">1</div>
+        <span class="lo-step-lbl">Decoding &amp; preparing audio</span>
+        <span class="lo-step-pct">20%</span>
+      </div>
+      <div class="lo-step" id="lo-s2">
+        <div class="lo-step-num">2</div>
+        <span class="lo-step-lbl">Extracting mel-spectrogram features</span>
+        <span class="lo-step-pct">40%</span>
+      </div>
+      <div class="lo-step" id="lo-s3">
+        <div class="lo-step-num">3</div>
+        <span class="lo-step-lbl">Running CNN + AST inference</span>
+        <span class="lo-step-pct">65%</span>
+      </div>
+      <div class="lo-step" id="lo-s4">
+        <div class="lo-step-num">4</div>
+        <span class="lo-step-lbl">Analysing acoustic features &amp; genre</span>
+        <span class="lo-step-pct">85%</span>
+      </div>
+      <div class="lo-step" id="lo-s5">
+        <div class="lo-step-num">5</div>
+        <span class="lo-step-lbl">Generating Grad-CAM heatmap</span>
+        <span class="lo-step-pct">100%</span>
+      </div>
+    </div>
+    <div class="lo-footer">
+      <div class="lo-eta" id="lo-eta">Estimating time…</div>
+      <div class="lo-status-dot" id="lo-status-dot"></div>
+    </div>
+  </div>
+</div>
 
 <!-- PAGE 1: LANDING -->
 <div class="page active" id="page-landing">
@@ -722,6 +883,93 @@ function clearAll(){
 }
 function err(msg){const b=document.getElementById('eb');b.textContent='⚠  '+msg;b.classList.add('on');}
 
+// ── LOADING OVERLAY HELPERS ────────────────────────────────
+let _loTimers=[];
+// Steps: id, trigger-ms, target % when this step becomes active
+const _loSteps=[
+  {id:'lo-s1',ms:0,   pct:8},
+  {id:'lo-s2',ms:2800,pct:30},
+  {id:'lo-s3',ms:5500,pct:55},
+  {id:'lo-s4',ms:9500,pct:80},
+  {id:'lo-s5',ms:13000,pct:94},
+];
+const _loCirc=2*Math.PI*43; // circumference ≈ 270
+let _loCurPct=0,_loRafId=null,_loTargetPct=0,_loStartTime=0;
+
+function _loSetProgress(pct){
+  pct=Math.max(0,Math.min(100,pct));
+  _loCurPct=pct;
+  const offset=_loCirc*(1-pct/100);
+  const ring=document.getElementById('lo-ring-prog');
+  const bar=document.getElementById('lo-bar-fill');
+  const num=document.getElementById('lo-pct-num');
+  if(ring) ring.style.strokeDashoffset=offset;
+  if(bar) bar.style.width=pct+'%';
+  if(num) num.textContent=Math.round(pct);
+}
+
+function _loAnimateTo(target,duration){
+  const start=_loCurPct,diff=target-start,t0=performance.now();
+  function step(now){
+    const frac=Math.min(1,(now-t0)/duration);
+    const ease=1-Math.pow(1-frac,3);
+    _loSetProgress(start+diff*ease);
+    if(frac<1) _loRafId=requestAnimationFrame(step);
+  }
+  if(_loRafId) cancelAnimationFrame(_loRafId);
+  _loRafId=requestAnimationFrame(step);
+}
+
+function showLoading(filename){
+  const ov=document.getElementById('loading-overlay');
+  document.getElementById('lo-filename').textContent=filename||'';
+  _loSteps.forEach(s=>{
+    const el=document.getElementById(s.id);
+    el.classList.remove('active','done');
+  });
+  _loSetProgress(0);
+  document.getElementById('lo-eta').textContent='Estimating time…';
+  const dot=document.getElementById('lo-status-dot');
+  if(dot) dot.style.background='var(--g)';
+  ov.classList.add('on');
+  _loTimers=[];
+  const start=Date.now();
+  _loSteps.forEach((s,i)=>{
+    const t=setTimeout(()=>{
+      if(i>0){
+        const prev=document.getElementById(_loSteps[i-1].id);
+        prev.classList.remove('active');prev.classList.add('done');
+      }
+      const el=document.getElementById(s.id);
+      el.classList.add('active');
+      _loAnimateTo(s.pct,700);
+      const elapsed=Math.round((Date.now()-start)/1000);
+      const etaGuess=Math.max(3,22-elapsed);
+      document.getElementById('lo-eta').textContent=`~${etaGuess}s remaining`;
+    },s.ms);
+    _loTimers.push(t);
+  });
+  // slow creep toward 97 after last step fires
+  const creepT=setTimeout(()=>_loAnimateTo(97,8000),14000);
+  _loTimers.push(creepT);
+}
+
+function hideLoading(){
+  _loTimers.forEach(t=>clearTimeout(t));
+  _loTimers=[];
+  _loSteps.forEach(s=>{
+    const el=document.getElementById(s.id);
+    el.classList.remove('active');el.classList.add('done');
+  });
+  _loAnimateTo(100,400);
+  document.getElementById('lo-eta').textContent='Complete!';
+  const dot=document.getElementById('lo-status-dot');
+  if(dot){dot.style.background='var(--g)';dot.style.animation='none';dot.style.opacity='1';}
+  setTimeout(()=>{
+    document.getElementById('loading-overlay').classList.remove('on');
+  },420);
+}
+
 async function run(){
   if(!staged)return;
   rb.disabled=true;
@@ -729,6 +977,7 @@ async function run(){
   document.getElementById('eb').classList.remove('on');
   document.getElementById('sf').classList.add('an');
   document.getElementById('st').textContent=`Analyzing "${staged.name}"…`;
+  showLoading(staged.name);
   const form=new FormData();form.append('files',staged);form.append('xai_deep','true');
   try{
     const res=await fetch('/classify',{method:'POST',body:form});
@@ -743,9 +992,13 @@ async function run(){
     if(!res.ok||data.error)throw new Error(data.error||`Server error (HTTP ${res.status})`);
     if(!data.results||!data.results[0])throw new Error('Empty response from server');
     const r0=data.results[0];
+    hideLoading();
     prepend(r0);
     if(!r0.error)clearStaged();
-  }catch(e){err(e.message);}
+  }catch(e){
+    hideLoading();
+    err(e.message);
+  }
   finally{
     document.getElementById('sb').classList.remove('on');
     document.getElementById('sf').classList.remove('an');
@@ -1031,13 +1284,6 @@ function buildCard(r){
       ${originalFmt?`<span class="fmt-tag">📁 ${esc(originalFmt)}</span>`:''}
       <span class="conversion-badge">🔄 ${esc(analyzedFmt)}</span>
       <span class="vchip ${vc.cls}"><span class="vchip-dot" style="background:${vc.dot}"></span>${esc(verdict)}</span>
-      <button class="btn-report" onclick="openReport(this)" title="Report misclassification">
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-          <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-        </svg>
-        Report
-      </button>
     </div>
     ${conversionNote?`<div class="conversion-note"><span>🔄 ${esc(conversionNote)}</span></div>`:''}
     <div class="vc-score">

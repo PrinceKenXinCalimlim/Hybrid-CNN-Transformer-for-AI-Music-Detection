@@ -530,47 +530,38 @@ class GradCAM:
 
         raw_h, raw_w = cam.shape[2], cam.shape[3]
 
-        # Upsample to mel shape (128 freq × 1024 time)
-        cam_up = F.interpolate(cam, size=(128, 1024), mode='bilinear', align_corners=False)
+        # ── OPTIMIZED: upsample directly to display size (64×256) not full mel (128×1024) ──
+        # This is 16× fewer pixels to compute vs the original approach, same visual quality.
+        DS_F, DS_T = 64, 256
+        cam_up = F.interpolate(cam, size=(DS_F, DS_T), mode='bilinear', align_corners=False)
         cam_np = cam_up.squeeze().detach().cpu().float().numpy()
 
         # Normalise to [0, 1]
         lo, hi = cam_np.min(), cam_np.max()
         cam_norm = np.zeros_like(cam_np) if (hi - lo) < 1e-12 else (cam_np - lo) / (hi - lo)
+        cam_small = cam_norm  # already at display resolution
 
-        # Top-5 regions: find local maxima in the heatmap
-        # cam_norm shape: (128 freq_bins, 1024 time_frames)
-        # axis=0 averages over freq → (1024,) time importance
-        # axis=1 averages over time → (128,)  freq importance
-        time_imp = cam_norm.mean(axis=0)   # (1024,) — time frame importance
-        freq_imp = cam_norm.mean(axis=1)   # (128,)  — freq bin importance
-        top_t = list(np.argsort(time_imp)[::-1][:5])   # top time frames (0-1023)
-        top_f = list(np.argsort(freq_imp)[::-1][:5])   # top freq bins  (0-127)
+        # Derive time/freq importance from the display-res map
+        time_imp = cam_small.mean(axis=0)   # (256,) — time importance
+        freq_imp = cam_small.mean(axis=1)   # (64,)  — freq importance
+        top_t = list(np.argsort(time_imp)[::-1][:5])
+        top_f = list(np.argsort(freq_imp)[::-1][:5])
+
+        # Scale indices back to real time/freq for display
+        t_scale = 1024 / DS_T   # maps display col → mel frame
+        f_scale = 128  / DS_F   # maps display row → mel freq bin
         top_regions = [
             {
-                "frame_idx": int(t),
-                "time_sec":  round(t * HOP_LENGTH / SAMPLE_RATE, 3),
-                "bin_idx":   int(f),
+                "frame_idx": int(t * t_scale),
+                "time_sec":  round(t * t_scale * HOP_LENGTH / SAMPLE_RATE, 3),
+                "bin_idx":   int(f * f_scale),
                 "freq_hz":   round(700 * (10 ** ((2595 * math.log10(1 + 0/700) +
                               (2595 * math.log10(1 + (SAMPLE_RATE/2)/700) -
-                               2595 * math.log10(1 + 0/700)) * f / 127) / 2595) - 1), 1),
-                "importance": round(float(cam_norm[f, t]), 4),  # cam_norm[freq, time]
+                               2595 * math.log10(1 + 0/700)) * (f * f_scale) / 127) / 2595) - 1), 1),
+                "importance": round(float(cam_small[f, t]), 4),
             }
             for t, f in zip(top_t, top_f)
         ]
-
-        # ── Vectorized average-pool downsample (no loops) ──
-        # 128×1024 → 64×256 using reshape+mean: 8× smaller, preserves local maxima better
-        # than strided indexing while being fully vectorized.
-        DS_F, DS_T = 64, 256
-        blk_f = cam_norm.shape[0] // DS_F   # 2
-        blk_t = cam_norm.shape[1] // DS_T   # 4
-        # Crop to exact multiple then reshape-mean (all numpy, no Python loops)
-        cam_crop = cam_norm[:DS_F * blk_f, :DS_T * blk_t]
-        cam_small = cam_crop.reshape(DS_F, blk_f, DS_T, blk_t).mean(axis=(1, 3))
-        # Re-normalise after pooling
-        lo2, hi2 = cam_small.min(), cam_small.max()
-        cam_small = np.zeros_like(cam_small) if (hi2 - lo2) < 1e-12 else (cam_small - lo2) / (hi2 - lo2)
 
         # ── Derive interpretation signals ──
         peak_importance  = float(time_imp.max())
@@ -630,14 +621,11 @@ class GradCAM:
         elif freq_spread_hz < 500 and len(top_regions) > 1:
             ai_signals.append(f"Narrow frequency cluster ({freq_spread_hz:.0f} Hz) — network locked onto a specific synthetic band")
 
-        # Overall pattern verdict — Grad-CAM signals + final verdict as tiebreaker
-        ai_score  = len(ai_signals)
-        hum_score = len(human_signals)
-
-        if ai_score > hum_score and ai_score >= 1:
+        # Overall pattern verdict from Grad-CAM alone
+        if len(ai_signals) >= 2 and len(ai_signals) > len(human_signals):
             pattern_verdict = "AI-like pattern"
             pattern_color   = "red"
-        elif hum_score > ai_score and hum_score >= 1:
+        elif len(human_signals) >= 2 and len(human_signals) > len(ai_signals):
             pattern_verdict = "Human-like pattern"
             pattern_color   = "green"
         else:
@@ -2251,39 +2239,6 @@ def classify():
                 
                 best_mel = mel_from_chunk(best_segment_waveform, mel_transform)
                 _, xai_deep = compute_xai_deep(best_mel, model, device)
-                # Align Grad-CAM pattern_verdict with the final model verdict
-                if xai_deep and "gradcam" in xai_deep and xai_deep["gradcam"] and "pattern_verdict" in xai_deep["gradcam"]:
-                    gc_data  = xai_deep["gradcam"]
-                    ai_sig   = len(gc_data.get("ai_signals", []))
-                    hum_sig  = len(gc_data.get("human_signals", []))
-                    # Final verdict carries 2 extra votes as a strong tiebreaker
-                    if "AI" in verdict:
-                        ai_sig  += 2
-                    elif "Human" in verdict:
-                        hum_sig += 2
-                    if ai_sig > hum_sig:
-                        gc_data["pattern_verdict"] = "AI-like pattern"
-                        gc_data["pattern_color"]   = "red"
-                        gc_data["plain_summary"]   = (
-                            f"The neural network found AI-like spectral patterns. "
-                            f"Peak activation at {gc_data.get('peak_freq_hz', 0):.0f} Hz "
-                            f"({gc_data.get('freq_zone', '—')}) over "
-                            f"{gc_data.get('time_spread_sec', 0):.2f}s — "
-                            f"consistent with the AI-generated verdict."
-                        )
-                    elif hum_sig > ai_sig:
-                        gc_data["pattern_verdict"] = "Human-like pattern"
-                        gc_data["pattern_color"]   = "green"
-                        gc_data["plain_summary"]   = (
-                            f"Activation was broadly spread across "
-                            f"{gc_data.get('time_spread_sec', 0):.1f}s and "
-                            f"{gc_data.get('freq_spread_hz', 0):.0f} Hz of frequency range, "
-                            f"centred in the {gc_data.get('freq_zone', '—')} "
-                            f"— typical of organic, human-performed audio."
-                        )
-                    else:
-                        gc_data["pattern_verdict"] = "Ambiguous pattern"
-                        gc_data["pattern_color"]   = "amber"
 
             # Natural-language explanation
             nl_explanation = generate_nl_explanation(
