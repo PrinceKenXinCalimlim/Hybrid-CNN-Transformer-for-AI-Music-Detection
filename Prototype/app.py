@@ -74,6 +74,58 @@ GENRE_WIN_SECONDARY   = 10
 GENRE_N_WINDOWS       = 3
 GENRE_TOP_SUBGENRES   = 3
 
+# ── Instrument detection config ───────────────────────────────────────────────
+INSTRUMENT_MODEL      = "mtg-upf/music-audio-tagging-mtat-msd-musicnn"
+INSTRUMENT_SAMPLE_RATE = 16000
+INSTRUMENT_WIN_SEC    = 10
+INSTRUMENT_N_WINDOWS  = 3
+INSTRUMENT_MIN_SCORE  = 0.08   # minimum tag score to surface as detected
+
+# Instrument tags present in the musicnn model vocabulary
+INSTRUMENT_TAGS = {
+    "guitar":       "Guitar",
+    "electric guitar": "Electric Guitar",
+    "bass guitar":  "Bass Guitar",
+    "piano":        "Piano",
+    "keyboard":     "Keyboard/Synth",
+    "drums":        "Drums",
+    "drum":         "Drums",
+    "violin":       "Violin",
+    "strings":      "Strings",
+    "trumpet":      "Trumpet",
+    "saxophone":    "Saxophone",
+    "flute":        "Flute",
+    "synthesizer":  "Synthesizer",
+    "synth":        "Synthesizer",
+    "organ":        "Organ",
+    "choir":        "Choir/Vocals",
+    "vocals":       "Vocals",
+    "voice":        "Vocals",
+    "cello":        "Cello",
+    "bass":         "Bass",
+    "percussion":   "Percussion",
+    "banjo":        "Banjo",
+    "ukulele":      "Ukulele",
+    "harmonica":    "Harmonica",
+}
+
+# Instruments that are intrinsically synthesized/electronic — lower AI-suspicion bar
+ELECTRONIC_INSTRUMENTS = {"Keyboard/Synth", "Synthesizer", "Organ"}
+
+# Per-instrument acoustic thresholds that indicate AI synthesis
+# Format: {instrument_name: {feature: (lo, hi, direction)}}
+# direction "high" = high value → AI, "low" = low value → AI
+INSTRUMENT_AI_HINTS = {
+    "Drums":          {"spectral_flatness": (0.15, 1.0, "high"), "beat_regularity": (0.92, 1.0, "high")},
+    "Guitar":         {"harmonic_ratio": (0.88, 1.0, "high"),    "noise_floor": (0.0, 0.0003, "low")},
+    "Electric Guitar":{"harmonic_ratio": (0.88, 1.0, "high"),    "noise_floor": (0.0, 0.0003, "low"),
+                       "zero_crossing_rate": (0.0, 0.02, "low")},  # real elec guitar has natural ZCR from distortion
+    "Bass Guitar":    {"harmonic_ratio": (0.90, 1.0, "high"),    "noise_floor": (0.0, 0.0002, "low")},
+    "Piano":          {"harmonic_ratio": (0.90, 1.0, "high"),    "spectral_flatness": (0.0, 0.03, "low")},
+    "Strings":        {"spectral_flatness": (0.0, 0.025, "low"), "pitch_stability": (0.95, 1.0, "high")},
+    "Vocals":         {"spectral_flatness": (0.18, 1.0, "high"), "pitch_stability": (0.96, 1.0, "high")},
+}
+
 
 GTZAN_PARENT = {
     "blues":"Blues","classical":"Classical","country":"Country","disco":"Electronic",
@@ -236,16 +288,21 @@ def _find_chorus_by_energy(waveform, total_duration_sec, clip_sec):
 def prepare_weighted_audio_analysis(waveform, total_duration_sec):
     clip_sec = DURATION_SEC
     dur = total_duration_sec
-    
+
     segments = []
-    
-    # ── Intro ──
-    intro_dur = min(clip_sec, dur)
-    if intro_dur > 0:
+
+    # ── Intro (first clip_sec of the track, moderate weight) ──
+    if dur > clip_sec:
+        intro_dur = min(clip_sec, dur)
         intro = waveform[:, :int(intro_dur * SAMPLE_RATE)]
-        segments.append(("intro", intro, 1.0, 0.0, intro_dur))
-    
-    # ── Chorus (energy-based detection) ──
+        segments.append(("intro", intro, 1.2, 0.0, intro_dur))
+    else:
+        # Track too short for separate intro — use full clip
+        full_dur = min(clip_sec, dur)
+        full = waveform[:, :int(full_dur * SAMPLE_RATE)]
+        segments.append(("intro", full, 1.0, 0.0, full_dur))
+
+    # ── Chorus (energy-based detection, highest weight) ──
     if dur > clip_sec:
         chorus_start = _find_chorus_by_energy(waveform, dur, clip_sec)
         chorus_start_samples = int(chorus_start * SAMPLE_RATE)
@@ -253,34 +310,87 @@ def prepare_weighted_audio_analysis(waveform, total_duration_sec):
         chorus_end_samples = chorus_start_samples + int(chorus_dur * SAMPLE_RATE)
         chorus = waveform[:, chorus_start_samples:chorus_end_samples]
         segments.append(("chorus", chorus, 1.5, chorus_start, chorus_start + chorus_dur))
-    
-    # ── Verse (second sample from ~30% of the track, avoids intro/chorus overlap) ──
+
+    # ── Pre-Chorus (clip_sec before the chorus start, if room exists) ──
+    if dur > clip_sec * 2:
+        # Find chorus segment (skip intro)
+        chorus_seg = None
+        for s in segments:
+            if s[0] == "chorus":
+                chorus_seg = s
+                break
+        if chorus_seg:
+            chorus_start_sec = chorus_seg[3]
+            pre_chorus_end = chorus_start_sec          # ends where chorus begins
+            pre_chorus_start = pre_chorus_end - clip_sec
+            if pre_chorus_start >= 1.0:               # enough room before chorus
+                pre_chorus_start_samples = int(pre_chorus_start * SAMPLE_RATE)
+                pre_chorus_end_samples   = int(pre_chorus_end   * SAMPLE_RATE)
+                pre_chorus = waveform[:, pre_chorus_start_samples:pre_chorus_end_samples]
+                segments.append(("pre-chorus", pre_chorus, 1.3, pre_chorus_start, pre_chorus_end))
+
+    # ── Verse 1 (~30% mark, avoids chorus and intro overlap) ──
+    if dur > clip_sec * 2:
+        chorus_start_sec = None
+        for s in segments:
+            if s[0] == "chorus":
+                chorus_start_sec = s[3]
+                break
+        verse1_target = dur * 0.30
+        if chorus_start_sec and abs(verse1_target - chorus_start_sec) < clip_sec:
+            verse1_target = dur * 0.20
+        verse1_start = max(1.0, verse1_target)
+        verse1_start = min(verse1_start, dur - clip_sec)
+        # Avoid overlapping with intro
+        if verse1_start < clip_sec:
+            verse1_start = clip_sec
+        verse1_start_samples = int(verse1_start * SAMPLE_RATE)
+        verse1_end_samples = verse1_start_samples + int(clip_sec * SAMPLE_RATE)
+        verse1 = waveform[:, verse1_start_samples:verse1_end_samples]
+        segments.append(("verse", verse1, 1.2, verse1_start, verse1_start + clip_sec))
+
+    # ── Verse 2 (~65% mark, avoids chorus and verse 1 overlap) ──
     if dur > clip_sec * 3:
-        verse_target = dur * 0.30
-        # Make sure it doesn't overlap with intro or chorus
-        if len(segments) >= 2:
-            chorus_start_sec = segments[1][3]
-            if abs(verse_target - chorus_start_sec) < clip_sec:
-                verse_target = dur * 0.70
-        verse_start = max(clip_sec + 1, verse_target)
-        verse_start = min(verse_start, dur - clip_sec)
-        verse_start_samples = int(verse_start * SAMPLE_RATE)
-        verse_end_samples = verse_start_samples + int(clip_sec * SAMPLE_RATE)
-        verse = waveform[:, verse_start_samples:verse_end_samples]
-        segments.append(("verse", verse, 1.2, verse_start, verse_start + clip_sec))
-    
-    # ── Ending ──
-    if dur > clip_sec:
-        ending_start = max(0.0, dur - clip_sec)
-        ending_start_samples = int(ending_start * SAMPLE_RATE)
-        ending = waveform[:, ending_start_samples:]
-        actual_dur = ending.shape[1] / SAMPLE_RATE
-        segments.append(("ending", ending, 0.8, ending_start, ending_start + actual_dur))
-    
-    if len(segments) == 0:
-        full = waveform[:, :min(waveform.shape[1], SAMPLES_NEEDED)]
-        segments.append(("full", full, 1.0, 0.0, min(dur, DURATION_SEC)))
-    
+        chorus_start_sec = None
+        for s in segments:
+            if s[0] == "chorus":
+                chorus_start_sec = s[3]
+                break
+        verse2_target = dur * 0.65
+        # Avoid overlapping chorus or verse 1
+        taken_starts = [s[3] for s in segments]
+        for taken in taken_starts:
+            if abs(verse2_target - taken) < clip_sec:
+                verse2_target = dur * 0.55
+                break
+        # Final safety clamp
+        verse2_start = max(1.0, verse2_target)
+        verse2_start = min(verse2_start, dur - clip_sec)
+        # Only add if sufficiently far from existing segments
+        if all(abs(verse2_start - s[3]) >= clip_sec * 0.75 for s in segments):
+            verse2_start_samples = int(verse2_start * SAMPLE_RATE)
+            verse2_end_samples = verse2_start_samples + int(clip_sec * SAMPLE_RATE)
+            verse2 = waveform[:, verse2_start_samples:verse2_end_samples]
+            segments.append(("verse 2", verse2, 1.1, verse2_start, verse2_start + clip_sec))
+
+    # ── Outro (~clip_sec before the end, lower weight) ──
+    if dur > clip_sec * 2:
+        outro_start = max(0.0, dur - clip_sec)
+        # Only add if sufficiently far from existing segments
+        if all(abs(outro_start - s[3]) >= clip_sec * 0.75 for s in segments):
+            outro_start_samples = int(outro_start * SAMPLE_RATE)
+            outro = waveform[:, outro_start_samples:]
+            actual_dur = outro.shape[1] / SAMPLE_RATE
+            segments.append(("outro", outro, 0.7, outro_start, outro_start + actual_dur))
+
+    # Remove duplicate intro if track is short and we already have a full intro
+    # (This prevents having both intro and full track when dur < clip_sec)
+    if dur < clip_sec and len(segments) > 1:
+        segments = [segments[0]]  # Keep only the intro/full track
+
+    # Return in chronological order
+    segments.sort(key=lambda s: s[3])
+
     return segments
 
 def analyze_weighted_segments(waveform, total_duration_sec, model, mel_transform, device):
@@ -308,9 +418,6 @@ def analyze_weighted_segments(waveform, total_duration_sec, model, mel_transform
         confidence = 0.5 + min(0.5, abs(neural_prob - 0.5))
         
         # Corroboration: does the human acoustic analysis agree with neural direction?
-        # human_score > 60 means acoustic features look human
-        # neural_prob < 0.5 means neural says human
-        # When both agree, that's corroborated evidence
         neural_says_human = neural_prob < 0.5
         acoustic_says_human = human_score > 60
         corroborated = neural_says_human == acoustic_says_human
@@ -353,7 +460,6 @@ def analyze_weighted_segments(waveform, total_duration_sec, model, mel_transform
     
     # ── High disagreement detection ──
     neural_std = np.std(neural_probs) if len(neural_probs) > 1 else 0.0
-    agreement_score = float(np.clip(1.0 - neural_std * 3, 0.0, 1.0))
     
     # When segments strongly disagree (std > 0.20), check if any segment
     # has BOTH high confidence AND acoustic corroboration — that's a stronger 
@@ -390,13 +496,13 @@ def analyze_weighted_segments(waveform, total_duration_sec, model, mel_transform
     
     best_segment = max(segment_results, key=lambda s: s["evidence_quality"] * s["weight"])
     
-    return weighted_neural, weighted_acoustic, agreement_score, segment_results, best_segment
+    return weighted_neural, weighted_acoustic, segment_results, best_segment
 
 # ══════════════════════════════════════════════════════════════════════════════
 # ── Calibrated Probability (NEURAL DOMINANT) ──────────────────────────────────
 # ══════════════════════════════════════════════════════════════════════════════
 
-def compute_calibrated_probability(neural_prob, acoustic_prob, feat_dict, genre_result=None, agreement_score=1.0):
+def compute_calibrated_probability(neural_prob, acoustic_prob, feat_dict, genre_result=None):
     """
     Neural network is the primary signal. Acoustic adjustments are small and
     agreement-scaled — they cannot flip a confident neural prediction.
@@ -454,13 +560,6 @@ def compute_calibrated_probability(neural_prob, acoustic_prob, feat_dict, genre_
         genre_adj = get_genre_adjustment(genre_name)
         adjustment += genre_adj
 
-    
-    # ── Scale adjustments by disagreement ──
-    # When segments agree strongly, trust the neural score more (less adjustment)
-    # When segments disagree, allow more adjustment
-    disagreement_factor = max(0.3, 1.0 - agreement_score)
-    adjustment *= disagreement_factor
-    
     # ── Hard cap: adjustments can't flip a confident prediction ──
     # If neural is >65% or <35%, cap adjustment to prevent flipping past 50%
     neural_pct = neural_prob * 100
@@ -530,38 +629,47 @@ class GradCAM:
 
         raw_h, raw_w = cam.shape[2], cam.shape[3]
 
-        # ── OPTIMIZED: upsample directly to display size (64×256) not full mel (128×1024) ──
-        # This is 16× fewer pixels to compute vs the original approach, same visual quality.
-        DS_F, DS_T = 64, 256
-        cam_up = F.interpolate(cam, size=(DS_F, DS_T), mode='bilinear', align_corners=False)
+        # Upsample to mel shape (128 freq × 1024 time)
+        cam_up = F.interpolate(cam, size=(128, 1024), mode='bilinear', align_corners=False)
         cam_np = cam_up.squeeze().detach().cpu().float().numpy()
 
         # Normalise to [0, 1]
         lo, hi = cam_np.min(), cam_np.max()
         cam_norm = np.zeros_like(cam_np) if (hi - lo) < 1e-12 else (cam_np - lo) / (hi - lo)
-        cam_small = cam_norm  # already at display resolution
 
-        # Derive time/freq importance from the display-res map
-        time_imp = cam_small.mean(axis=0)   # (256,) — time importance
-        freq_imp = cam_small.mean(axis=1)   # (64,)  — freq importance
-        top_t = list(np.argsort(time_imp)[::-1][:5])
-        top_f = list(np.argsort(freq_imp)[::-1][:5])
-
-        # Scale indices back to real time/freq for display
-        t_scale = 1024 / DS_T   # maps display col → mel frame
-        f_scale = 128  / DS_F   # maps display row → mel freq bin
+        # Top-5 regions: find local maxima in the heatmap
+        # cam_norm shape: (128 freq_bins, 1024 time_frames)
+        # axis=0 averages over freq → (1024,) time importance
+        # axis=1 averages over time → (128,)  freq importance
+        time_imp = cam_norm.mean(axis=0)   # (1024,) — time frame importance
+        freq_imp = cam_norm.mean(axis=1)   # (128,)  — freq bin importance
+        top_t = list(np.argsort(time_imp)[::-1][:5])   # top time frames (0-1023)
+        top_f = list(np.argsort(freq_imp)[::-1][:5])   # top freq bins  (0-127)
         top_regions = [
             {
-                "frame_idx": int(t * t_scale),
-                "time_sec":  round(t * t_scale * HOP_LENGTH / SAMPLE_RATE, 3),
-                "bin_idx":   int(f * f_scale),
+                "frame_idx": int(t),
+                "time_sec":  round(t * HOP_LENGTH / SAMPLE_RATE, 3),
+                "bin_idx":   int(f),
                 "freq_hz":   round(700 * (10 ** ((2595 * math.log10(1 + 0/700) +
                               (2595 * math.log10(1 + (SAMPLE_RATE/2)/700) -
-                               2595 * math.log10(1 + 0/700)) * (f * f_scale) / 127) / 2595) - 1), 1),
-                "importance": round(float(cam_small[f, t]), 4),
+                               2595 * math.log10(1 + 0/700)) * f / 127) / 2595) - 1), 1),
+                "importance": round(float(cam_norm[f, t]), 4),  # cam_norm[freq, time]
             }
             for t, f in zip(top_t, top_f)
         ]
+
+        # ── Vectorized average-pool downsample (no loops) ──
+        # 128×1024 → 64×256 using reshape+mean: 8× smaller, preserves local maxima better
+        # than strided indexing while being fully vectorized.
+        DS_F, DS_T = 64, 256
+        blk_f = cam_norm.shape[0] // DS_F   # 2
+        blk_t = cam_norm.shape[1] // DS_T   # 4
+        # Crop to exact multiple then reshape-mean (all numpy, no Python loops)
+        cam_crop = cam_norm[:DS_F * blk_f, :DS_T * blk_t]
+        cam_small = cam_crop.reshape(DS_F, blk_f, DS_T, blk_t).mean(axis=(1, 3))
+        # Re-normalise after pooling
+        lo2, hi2 = cam_small.min(), cam_small.max()
+        cam_small = np.zeros_like(cam_small) if (hi2 - lo2) < 1e-12 else (cam_small - lo2) / (hi2 - lo2)
 
         # ── Derive interpretation signals ──
         peak_importance  = float(time_imp.max())
@@ -621,11 +729,14 @@ class GradCAM:
         elif freq_spread_hz < 500 and len(top_regions) > 1:
             ai_signals.append(f"Narrow frequency cluster ({freq_spread_hz:.0f} Hz) — network locked onto a specific synthetic band")
 
-        # Overall pattern verdict from Grad-CAM alone
-        if len(ai_signals) >= 2 and len(ai_signals) > len(human_signals):
+        # Overall pattern verdict — Grad-CAM signals + final verdict as tiebreaker
+        ai_score  = len(ai_signals)
+        hum_score = len(human_signals)
+
+        if ai_score > hum_score and ai_score >= 1:
             pattern_verdict = "AI-like pattern"
             pattern_color   = "red"
-        elif len(human_signals) >= 2 and len(human_signals) > len(ai_signals):
+        elif hum_score > ai_score and hum_score >= 1:
             pattern_verdict = "Human-like pattern"
             pattern_color   = "green"
         else:
@@ -1053,6 +1164,285 @@ def classify_genre(waveform):
     return {"top":{"label":top,"score":round(top_score,1)},"all":[{"label":p,"score":s} for p,s in sorted_p[:10]],
             "subgenres":subs,"top_subgenre":top_sub,"sources":sources,"window_count":len(pw+sw),
             "stability":round(stab*100,1),"confidence_note":cn,"primary_used":bool(pw),"secondary_used":bool(sw)}
+
+# ── Instrument AI/real classification ────────────────────────────────────────
+
+def _infer_instruments_acoustic(waveform, feat_dict):
+    """
+    Acoustic-only instrument inference — no external model required.
+    Uses spectral + temporal features to estimate which instrument families
+    are likely present and how 'real' they sound.
+    Returns a dict of {display_name: tag_score 0-1}.
+    """
+    arr = waveform.mean(0).numpy() if waveform.shape[0] > 1 else waveform.squeeze().numpy()
+    sr  = SAMPLE_RATE
+
+    fft_mag  = np.abs(np.fft.rfft(arr[:sr], n=2048))
+    fft_freq = np.fft.rfftfreq(2048, d=1/sr)
+
+    def band_energy(lo, hi):
+        mask = (fft_freq >= lo) & (fft_freq < hi)
+        return float(np.mean(fft_mag[mask]**2)) if mask.any() else 0.0
+
+    sub_bass   = band_energy(20,   80)
+    bass_low   = band_energy(80,   250)
+    bass_mid   = band_energy(250,  500)
+    mid        = band_energy(500,  2000)
+    upper_mid  = band_energy(2000, 4000)
+    presence   = band_energy(4000, 8000)
+    air        = band_energy(8000, 16000)
+    total_e    = sub_bass + bass_low + bass_mid + mid + upper_mid + presence + air + 1e-12
+
+    def rel(e): return e / total_e
+
+    hr   = feat_dict.get("harmonic_ratio", 0.5)
+    br   = feat_dict.get("beat_regularity", 0.5)
+    sf   = feat_dict.get("spectral_flatness", 0.1)
+    zcr  = feat_dict.get("zero_crossing_rate", 0.05)
+    ps   = feat_dict.get("pitch_stability", 0.5)
+    sc   = feat_dict.get("spectral_centroid", 0.3)
+    dr   = feat_dict.get("dynamic_range", 0.01)
+
+    detected = {}
+
+    # ── Drums / Percussion ──────────────────────────────────────────────────
+    # Strong sub+bass transients, rhythmic regularity, lower harmonic purity
+    drum_score = (rel(sub_bass) * 4 + rel(bass_low) * 2) * (br ** 1.2) * max(0.1, 1.1 - hr)
+    if drum_score > 0.012:
+        detected["Drums"] = min(drum_score * 7, 1.0)
+
+    # ── Electric Guitar ─────────────────────────────────────────────────────
+    # Distorted electric guitar (e.g. Purple Haze): dominant mid energy,
+    # moderate-to-high ZCR from distortion, spread across mid+upper_mid+presence.
+    # Does NOT require high harmonic ratio — distortion reduces it.
+    elec_guitar_score = (rel(mid) * 2.0 + rel(upper_mid) * 1.5 + rel(presence) * 0.8) * (0.4 + zcr * 3)
+    if elec_guitar_score > 0.08:
+        detected["Electric Guitar"] = min(elec_guitar_score * 2.0, 1.0)
+
+    # ── Acoustic Guitar ──────────────────────────────────────────────────────
+    # Clean acoustic: mid + upper-mid + presence, higher harmonic ratio, lower ZCR
+    acoustic_guitar_score = (rel(mid) * 1.5 + rel(upper_mid) * 1.2 + rel(presence) * 0.5) * hr * (1 - min(zcr * 8, 0.8))
+    if acoustic_guitar_score > 0.05:
+        detected["Guitar"] = min(acoustic_guitar_score * 3.0, 1.0)
+
+    # ── Bass Guitar ─────────────────────────────────────────────────────────
+    # Strong low-end, moderate harmonics
+    bass_score = (rel(bass_low) * 2.0 + rel(bass_mid) * 1.5 + rel(sub_bass) * 0.5) * (hr * 0.5 + 0.5)
+    if bass_score > 0.05:
+        detected["Bass Guitar"] = min(bass_score * 3.5, 1.0)
+
+    # ── Vocals ───────────────────────────────────────────────────────────────
+    # Mid + upper-mid dominant, natural ZCR range 0.05–0.12, moderate harmonics
+    zcr_vocal_fit = max(0, 1 - abs(zcr - 0.085) * 10)
+    vocal_score = (rel(mid) * 2.0 + rel(upper_mid) * 1.2) * (hr * 0.6 + 0.4) * zcr_vocal_fit
+    if vocal_score > 0.04:
+        detected["Vocals"] = min(vocal_score * 4.0, 1.0)
+
+    # ── Piano / Keys ─────────────────────────────────────────────────────────
+    # Broad mid spectrum, high harmonic ratio, moderate pitch stability, low SF
+    piano_score = (rel(bass_mid) + rel(mid) * 1.5 + rel(upper_mid)) * hr * ps
+    if piano_score > 0.06 and sf < 0.20:
+        detected["Piano"] = min(piano_score * 2.5, 1.0)
+
+    # ── Strings ──────────────────────────────────────────────────────────────
+    # Upper-mid + presence energy, sustained pitch, high harmonic ratio
+    strings_score = (rel(upper_mid) * 1.5 + rel(presence) * 0.8) * hr * (ps * 0.7 + 0.3)
+    if strings_score > 0.025:
+        detected["Strings"] = min(strings_score * 4.5, 1.0)
+
+    # ── Synthesizer ───────────────────────────────────────────────────────────
+    # Unnaturally flat spectrum OR dominant air-band energy
+    synth_score = sf * 2.0 + rel(air) * 2.5
+    if synth_score > 0.40:
+        detected["Synthesizer"] = min(synth_score * 0.9, 1.0)
+
+    # ── Trumpet / Brass ───────────────────────────────────────────────────────
+    # Strong upper-mid + presence, high harmonic ratio, bright spectral centroid
+    brass_score = (rel(upper_mid) * 1.5 + rel(presence)) * hr
+    if brass_score > 0.04 and sc > 0.30:
+        detected["Trumpet"] = min(brass_score * 3.5, 1.0)
+
+    # ── Fallback ─────────────────────────────────────────────────────────────
+    # Always return at least one instrument for any music track
+    if not detected:
+        bands = {
+            "Drums":          sub_bass + bass_low,
+            "Electric Guitar": mid + upper_mid,
+            "Vocals":          upper_mid,
+            "Synthesizer":     presence + air,
+        }
+        detected[max(bands, key=bands.get)] = 0.45
+
+    return detected
+
+
+def _detect_instrument_tags(waveform, feat_dict=None):
+    """Run musicnn tagger over sliding windows; fall back to acoustic inference."""
+    if instrument_pipeline is None:
+        return _infer_instruments_acoustic(waveform, feat_dict or {})
+
+    total = waveform.shape[1]
+    win   = int(INSTRUMENT_WIN_SEC * INSTRUMENT_SAMPLE_RATE)
+    step  = max(win, total // (INSTRUMENT_N_WINDOWS + 1))
+    starts = [i * step for i in range(INSTRUMENT_N_WINDOWS) if i * step + win <= total]
+    if not starts:
+        starts = [0]
+    scores: dict[str, list[float]] = {}
+    for s in starts:
+        clip = waveform[:, s: s + win]
+        if clip.shape[1] < win:
+            clip = torch.nn.functional.pad(clip, (0, win - clip.shape[1]))
+        mono = clip.mean(0).numpy()
+        try:
+            preds = instrument_pipeline({"raw": mono, "sampling_rate": INSTRUMENT_SAMPLE_RATE},
+                                        top_k=50)
+            for p in preds:
+                lbl = p["label"].lower()
+                scores.setdefault(lbl, []).append(float(p["score"]))
+        except Exception:
+            pass
+    return {k: float(np.mean(v)) for k, v in scores.items()}
+
+
+def _score_instrument_authenticity(instrument_name, feat_dict, ai_probability):
+    """
+    Return (ai_score 0-100, confidence 'low'|'medium'|'high', signals list).
+    Combines the track-level AI probability with per-instrument acoustic hints.
+    """
+    hints   = INSTRUMENT_AI_HINTS.get(instrument_name, {})
+    signals = []
+    nudges  = []
+
+    for feat_key, (lo, hi, direction) in hints.items():
+        val = feat_dict.get(feat_key)
+        if val is None:
+            continue
+        in_range = lo <= val <= hi
+        if in_range:
+            if direction == "high":
+                nudges.append(+12)
+                signals.append(f"{'Unusually high' if feat_key != 'beat_regularity' else 'Overly rigid'} "
+                               f"{feat_key.replace('_',' ')} ({val:.3f}) — common in AI-generated {instrument_name.lower()}")
+            else:
+                nudges.append(+10)
+                signals.append(f"{'Suspiciously low' } "
+                               f"{feat_key.replace('_',' ')} ({val:.3f}) — typical of synthesized {instrument_name.lower()}")
+        else:
+            if direction == "high":
+                nudges.append(-8)
+                signals.append(f"Natural {feat_key.replace('_',' ')} ({val:.3f}) — consistent with a real {instrument_name.lower()}")
+            else:
+                nudges.append(-6)
+
+    base       = float(ai_probability)
+    # Electronic instruments are expected to sound synthetic — soften the AI score
+    if instrument_name in ELECTRONIC_INSTRUMENTS:
+        base = max(base - 20, 0)
+
+    nudge_total = sum(nudges) if nudges else 0
+    raw_score   = float(np.clip(base + nudge_total, 0, 100))
+
+    if len(nudges) >= 2:
+        confidence = "high"
+    elif len(nudges) == 1:
+        confidence = "medium"
+    else:
+        confidence = "low"
+
+    if raw_score >= 65:
+        verdict = "AI-generated"
+    elif raw_score <= 40:
+        verdict = "Real / Performed"
+    else:
+        verdict = "Uncertain"
+
+    return {
+        "ai_score":   round(raw_score, 1),
+        "real_score": round(100 - raw_score, 1),
+        "verdict":    verdict,
+        "confidence": confidence,
+        "signals":    signals[:3],  # top 3 most relevant signals
+    }
+
+
+def classify_instruments(waveform, feat_dict, ai_probability):
+    """
+    Detect which instruments are present and classify each as AI or real.
+    Always returns results — uses acoustic fallback if pipeline unavailable.
+    """
+    # _detect_instrument_tags now always returns something (acoustic fallback)
+    raw_tags = _detect_instrument_tags(waveform, feat_dict)
+    if not raw_tags:
+        return {"available": True, "instruments": [], "note": "No instruments detected"}
+
+    # When pipeline is loaded, map raw tags through INSTRUMENT_TAGS vocab
+    # When using acoustic fallback, raw_tags already uses display names directly
+    detected = {}
+    if instrument_pipeline is not None:
+        for tag_key, display_name in INSTRUMENT_TAGS.items():
+            score = raw_tags.get(tag_key, 0.0)
+            if score >= INSTRUMENT_MIN_SCORE:
+                if display_name not in detected or score > detected[display_name]["tag_score"]:
+                    detected[display_name] = {"tag_score": float(score)}
+    else:
+        # Acoustic fallback — raw_tags keys ARE display names already
+        for display_name, score in raw_tags.items():
+            if score >= INSTRUMENT_MIN_SCORE:
+                detected[display_name] = {"tag_score": float(score)}
+
+    if not detected:
+        return {"available": True, "instruments": [], "note": "No instruments detected above threshold"}
+
+    def _confidence_from_reliability(score):
+        if score >= 75:
+            return "high"
+        if score >= 50:
+            return "medium"
+        return "low"
+
+    instruments = []
+    for name, meta in sorted(detected.items(), key=lambda x: x[1]["tag_score"], reverse=True):
+        auth = _score_instrument_authenticity(name, feat_dict, ai_probability)
+        tag_pct = float(round(meta["tag_score"] * 100, 1))
+        decisiveness = float(round(abs(auth["ai_score"] - 50.0) * 2.0, 1))  # 0..100
+        reliability = float(np.clip(tag_pct * 0.60 + decisiveness * 0.40, 0.0, 100.0))
+        confidence = _confidence_from_reliability(reliability)
+        instruments.append({
+            "name":        name,
+            "tag_score":   tag_pct,  # convert to pct
+            "ai_score":    auth["ai_score"],
+            "real_score":  auth["real_score"],
+            "verdict":     auth["verdict"],
+            "confidence":  confidence,
+            "reliability_score": round(reliability, 1),
+            "decisiveness": decisiveness,
+            "signals":     auth["signals"],
+            "is_electronic": name in ELECTRONIC_INSTRUMENTS,
+        })
+
+    # Summary
+    ai_count   = sum(1 for i in instruments if i["verdict"] == "AI-generated")
+    real_count = sum(1 for i in instruments if i["verdict"] == "Real / Performed")
+    unc_count  = sum(1 for i in instruments if i["verdict"] == "Uncertain")
+
+    if ai_count > real_count:
+        summary_verdict = "Mostly AI-generated instruments"
+    elif real_count > ai_count:
+        summary_verdict = "Mostly real/performed instruments"
+    else:
+        summary_verdict = "Mixed — AI and real instruments detected"
+
+    return {
+        "available":        True,
+        "source":           "neural_tagger" if instrument_pipeline is not None else "acoustic_analysis",
+        "instruments":      instruments[:8],   # cap at 8 for UI
+        "summary_verdict":  summary_verdict,
+        "avg_reliability":  round(float(np.mean([i["reliability_score"] for i in instruments])) if instruments else 0.0, 1),
+        "ai_count":         ai_count,
+        "real_count":       real_count,
+        "uncertain_count":  unc_count,
+    }
+
 
 # ── Audio conversion ──────────────────────────────────────────────────────────
 mel_transform = torchaudio.transforms.MelSpectrogram(sample_rate=SAMPLE_RATE, n_fft=1024, hop_length=HOP_LENGTH, n_mels=128)
@@ -2018,6 +2408,22 @@ except Exception as e:
 
 GENRE_AVAILABLE=GENRE_PRIMARY_AVAILABLE or GENRE_SECONDARY_AVAILABLE
 
+print(f"[*] Loading instrument tagger ({INSTRUMENT_MODEL})...")
+INSTRUMENT_AVAILABLE = False
+instrument_pipeline  = None
+try:
+    instrument_pipeline = pipeline(
+        "audio-classification",
+        model=INSTRUMENT_MODEL,
+        device=0 if torch.cuda.is_available() else -1,
+        trust_remote_code=True,
+    )
+    INSTRUMENT_AVAILABLE = True
+    print("[✓] Instrument tagger loaded")
+except Exception as _ie:
+    print(f"[!] Instrument tagger failed to load: {_ie}")
+    instrument_pipeline = None
+
 # ── Preview clips ─────────────────────────────────────────────────────────────
 PREVIEW_CLIP_SEC = DURATION_SEC
 PREVIEW_DIR       = "preview_clips"
@@ -2078,7 +2484,7 @@ def _make_previews(wav_path, duration_sec, clip_sec=PREVIEW_CLIP_SEC):
         return {
             "merged_url": f"/preview_clips/{merged_filename}",
             "segments": [{"label": label, "start_sec": round(start, 2), "duration_sec": round(seg_dur, 2), "frames": int(seg_dur * SAMPLE_RATE / HOP_LENGTH)}
-                         for label, start, seg_dur in segments if seg_dur > 0],
+                         for label, start, dur_seg in segments if dur_seg > 0],
             "total_duration_sec": round(total_dur, 2),
             "total_frames": int(total_dur * SAMPLE_RATE / HOP_LENGTH),
             "frames_per_clip": FRAMES_NEEDED, "cached": False
@@ -2197,7 +2603,7 @@ def classify():
                 waveform = torchaudio.transforms.Resample(sr, SAMPLE_RATE)(waveform)
                 sr = SAMPLE_RATE
 
-            weighted_neural, weighted_acoustic, agreement_score, segment_results, best_segment = analyze_weighted_segments(
+            weighted_neural, weighted_acoustic, segment_results, best_segment = analyze_weighted_segments(
                 waveform, total_secs, model, mel_transform, device
             )
 
@@ -2211,7 +2617,7 @@ def classify():
             is_compressed, _, codec_conf, _ = detect_codec_compression(sample_for_codec, SAMPLE_RATE)
 
             ai_probability, total_adjustment, human_reasons = compute_calibrated_probability(
-                weighted_neural, weighted_acoustic, chunk_feat, genre_result, agreement_score
+                weighted_neural, weighted_acoustic, chunk_feat, genre_result
             )
 
             if is_compressed:
@@ -2220,7 +2626,10 @@ def classify():
             verdict, verdict_explanation = derive_verdict(ai_probability)
 
             human_likelihood_score = compute_human_likelihood_score(chunk_feat)
-            
+
+            # ── Instrument AI/real classification ──
+            instrument_analysis = classify_instruments(waveform, chunk_feat, ai_probability)
+
             # XAI deep
             run_xai_deep = request.form.get("xai_deep", "false").lower() == "true"
             xai_deep = None
@@ -2239,6 +2648,39 @@ def classify():
                 
                 best_mel = mel_from_chunk(best_segment_waveform, mel_transform)
                 _, xai_deep = compute_xai_deep(best_mel, model, device)
+                # Align Grad-CAM pattern_verdict with the final model verdict
+                if xai_deep and "gradcam" in xai_deep and xai_deep["gradcam"] and "pattern_verdict" in xai_deep["gradcam"]:
+                    gc_data  = xai_deep["gradcam"]
+                    ai_sig   = len(gc_data.get("ai_signals", []))
+                    hum_sig  = len(gc_data.get("human_signals", []))
+                    # Final verdict carries 2 extra votes as a strong tiebreaker
+                    if "AI" in verdict:
+                        ai_sig  += 2
+                    elif "Human" in verdict:
+                        hum_sig += 2
+                    if ai_sig > hum_sig:
+                        gc_data["pattern_verdict"] = "AI-like pattern"
+                        gc_data["pattern_color"]   = "red"
+                        gc_data["plain_summary"]   = (
+                            f"The neural network found AI-like spectral patterns. "
+                            f"Peak activation at {gc_data.get('peak_freq_hz', 0):.0f} Hz "
+                            f"({gc_data.get('freq_zone', '—')}) over "
+                            f"{gc_data.get('time_spread_sec', 0):.2f}s — "
+                            f"consistent with the AI-generated verdict."
+                        )
+                    elif hum_sig > ai_sig:
+                        gc_data["pattern_verdict"] = "Human-like pattern"
+                        gc_data["pattern_color"]   = "green"
+                        gc_data["plain_summary"]   = (
+                            f"Activation was broadly spread across "
+                            f"{gc_data.get('time_spread_sec', 0):.1f}s and "
+                            f"{gc_data.get('freq_spread_hz', 0):.0f} Hz of frequency range, "
+                            f"centred in the {gc_data.get('freq_zone', '—')} "
+                            f"— typical of organic, human-performed audio."
+                        )
+                    else:
+                        gc_data["pattern_verdict"] = "Ambiguous pattern"
+                        gc_data["pattern_color"]   = "amber"
 
             # Natural-language explanation
             nl_explanation = generate_nl_explanation(
@@ -2254,7 +2696,7 @@ def classify():
                 acoustic_deep = compute_acoustic_deep_analysis(
                     feat=chunk_feat,
                     genre_result=genre_result,
-                    segment_results=safe_segs,
+                    segment_results=segment_results,
                     neural_prob=weighted_neural,
                     ai_probability=ai_probability,
                     verdict=verdict,
@@ -2310,7 +2752,6 @@ def classify():
                 "segment_analysis": {
                     "segments": safe_segs,
                     "best_segment": best_segment["name"],
-                    "agreement_score": round(agreement_score, 3),
                     "weighted_neural": round(weighted_neural, 4),
                     "weighted_acoustic": round(weighted_acoustic, 4),
                     "neural_weight": NEURAL_WEIGHT,
@@ -2345,6 +2786,7 @@ def classify():
                     "converted_from": ext,
                     "sample_rate": sr,
                 },
+                "instrument_analysis": instrument_analysis,
                 "previews": _make_previews(wav_path, total_secs),
             })
         except Exception as e:
