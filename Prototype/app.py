@@ -35,18 +35,26 @@ class _SafeEncoder(_json.JSONEncoder):
         return super().default(obj)
 
 # ── Config ────────────────────────────────────────────────────────────────────
+# Base directory = folder where app.py lives, regardless of where Flask is launched from
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 SAMPLE_RATE     = 16000
 HOP_LENGTH      = 160
 FRAMES_NEEDED   = 1024
 SAMPLES_NEEDED  = FRAMES_NEEDED * HOP_LENGTH
 DURATION_SEC    = SAMPLES_NEEDED / SAMPLE_RATE
 
-CHECKPOINT_PATH = "best_model.pth"
-device          = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-SUPPORTED_EXTS  = {'.mp3', '.wav', '.flac', '.ogg', '.m4a', '.aac'}
-SAVE_CONVERTED_WAV = True
-CONVERTED_WAV_DIR  = "converted_wavs"
-REPORTS_FILE       = "misclassification_reports.jsonl"
+CHECKPOINT_PATH      = os.path.join(BASE_DIR, "best_model.pth")
+device               = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+SUPPORTED_EXTS       = {'.mp3', '.wav', '.flac', '.ogg', '.m4a', '.aac'}
+SAVE_CONVERTED_WAV   = True
+CONVERTED_WAV_DIR    = os.path.join(BASE_DIR, "converted_wavs")
+REPORTS_FILE         = os.path.join(BASE_DIR, "misclassification_reports.jsonl")
+ANALYSIS_REPORTS_DIR = os.path.join(BASE_DIR, "reports")   # <── saved next to app.py
+
+# Create folders on startup
+os.makedirs(CONVERTED_WAV_DIR,    exist_ok=True)
+os.makedirs(ANALYSIS_REPORTS_DIR, exist_ok=True)
 
 PROB_FLOOR        = 3.0
 PROB_CEILING      = 97.0
@@ -55,7 +63,7 @@ NEURAL_WEIGHT = 0.85
 ACOUSTIC_WEIGHT = 0.15
 
 AI_THRESHOLD = 60
-HUMAN_THRESHOLD = 50
+HUMAN_THRESHOLD = 45
 
 # XAI deep config
 XAI_IG_STEPS       = 50
@@ -144,7 +152,7 @@ def parse_discogs_label(label):
     return (alias or parent), sub
 
 # ── Flask ─────────────────────────────────────────────────────────────────────
-app = Flask(__name__, static_folder=".")
+app = Flask(__name__, static_folder=BASE_DIR)
 CORS(app)
 app.config["MAX_CONTENT_LENGTH"] = 500 * 1024 * 1024
 
@@ -2348,8 +2356,8 @@ def compute_acoustic_deep_analysis(feat, genre_result=None, segment_results=None
 
 def derive_verdict(p):
     """Classify AI probability into a verdict label.
-    Uses AI_THRESHOLD (60) and HUMAN_THRESHOLD (50) so thresholds are consistent
-    with config constants. Gap 50-60 = Not Sure zone.
+    Uses AI_THRESHOLD (60) and HUMAN_THRESHOLD (45) so thresholds are consistent
+    with config constants. Gap 46-59 = Not Sure zone.
     """
     if p >= 80:
         return "Likely AI-generated", f"Strong AI patterns detected ({p:.1f}%)"
@@ -2357,10 +2365,10 @@ def derive_verdict(p):
         return "Likely AI-generated", f"Patterns lean toward AI generation ({p:.1f}%)"
     elif p <= 20:
         return "Likely Human", f"Strong human characteristics detected ({100-p:.1f}% human)"
-    elif p <= HUMAN_THRESHOLD:  # <= 50
+    elif p <= HUMAN_THRESHOLD:  # <= 45
         return "Likely Human", f"Patterns lean toward human performance ({100-p:.1f}% human)"
     else:
-        # 51–59: genuine ambiguous zone between the two thresholds
+        # 46–59: genuine ambiguous zone between the two thresholds
         return "Not Sure", f"Signal is ambiguous — borderline result ({p:.1f}%)"
 
 # ── Load models ───────────────────────────────────────────────────────────────
@@ -2796,7 +2804,91 @@ def classify():
         finally:
             if tmp_path and os.path.exists(tmp_path):
                 os.unlink(tmp_path)
+
+    # ── Auto-save a report for each successful result ──────────────────────────
+    for r in results:
+        if "error" not in r:
+            try:
+                report_id = str(uuid.uuid4())
+                report = {
+                    "report_id":        report_id,
+                    "analyzed_at":      datetime.datetime.utcnow().isoformat() + "Z",
+                    "filename":         r.get("original_filename", "unknown"),
+                    "format":           r.get("original_format", ""),
+                    "duration_sec":     r.get("duration_sec"),
+                    "verdict":          r.get("verdict"),
+                    "ai_probability":   r.get("ai_probability"),
+                    "human_probability":r.get("human_probability"),
+                    "nl_explanation":   r.get("nl_explanation", ""),
+                    "genre":            r.get("genre", {}).get("top", {}).get("label") if r.get("genre") else None,
+                    "genre_score":      r.get("genre", {}).get("top", {}).get("score") if r.get("genre") else None,
+                    "human_likelihood": r.get("human_indicators", {}).get("score"),
+                    "beat_regularity":  r.get("human_indicators", {}).get("beat_regularity"),
+                    "pitch_stability":  r.get("human_indicators", {}).get("pitch_stability"),
+                    "dynamic_range":    r.get("human_indicators", {}).get("dynamic_range"),
+                    "segments":         [
+                        {
+                            "name":        s.get("name"),
+                            "neural_prob": round(s.get("neural_prob", 0) * 100, 1),
+                            "human_score": s.get("human_score"),
+                            "weight":      s.get("weight"),
+                        }
+                        for s in r.get("segment_analysis", {}).get("segments", [])
+                    ],
+                    "instruments":      [
+                        {"name": i.get("name"), "verdict": i.get("verdict")}
+                        for i in (r.get("instrument_analysis", {}) or {}).get("instruments", [])
+                    ] if r.get("instrument_analysis") else [],
+                }
+                report_path = os.path.join(ANALYSIS_REPORTS_DIR, f"{report_id}.json")
+                with open(report_path, "w") as f:
+                    _json.dump(report, f, indent=2, cls=_SafeEncoder)
+            except Exception as save_err:
+                print(f"[report] Failed to save report: {save_err}")
+
     return jsonify({"results": results})
+
+@app.route("/reports", methods=["GET"])
+def list_reports():
+    """Return all saved analysis reports, newest first."""
+    reports = []
+    try:
+        for fname in os.listdir(ANALYSIS_REPORTS_DIR):
+            if fname.endswith(".json"):
+                fpath = os.path.join(ANALYSIS_REPORTS_DIR, fname)
+                try:
+                    with open(fpath) as f:
+                        reports.append(_json.load(f))
+                except Exception:
+                    pass
+        reports.sort(key=lambda r: r.get("analyzed_at", ""), reverse=True)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    return jsonify({"reports": reports, "total": len(reports)})
+
+
+@app.route("/reports/<report_id>", methods=["GET"])
+def get_report(report_id):
+    """Return a single report by ID."""
+    # sanitize
+    safe_id = "".join(c for c in report_id if c.isalnum() or c == "-")
+    fpath = os.path.join(ANALYSIS_REPORTS_DIR, f"{safe_id}.json")
+    if not os.path.exists(fpath):
+        return jsonify({"error": "Report not found"}), 404
+    with open(fpath) as f:
+        return jsonify(_json.load(f))
+
+
+@app.route("/reports/<report_id>", methods=["DELETE"])
+def delete_report(report_id):
+    """Delete a report by ID."""
+    safe_id = "".join(c for c in report_id if c.isalnum() or c == "-")
+    fpath = os.path.join(ANALYSIS_REPORTS_DIR, f"{safe_id}.json")
+    if not os.path.exists(fpath):
+        return jsonify({"error": "Report not found"}), 404
+    os.remove(fpath)
+    return jsonify({"deleted": safe_id})
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=False)

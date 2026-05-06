@@ -8,12 +8,19 @@
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 :root{
-  --g:#17a870;--gd:#0d8a5c;--gbg:#16a06b;
-  --amber:#d97706;--red:#dc2626;
-  --txt:#0f1a14;--mut:#6b7e75;--faint:#a8b4ae;
-  --brd:#e3ebe7;--page:#f0f3f1;--card:#fff;
+  --g:#10b981;--gd:#059669;--gbg:#065f46;
+  --amber:#f59e0b;--red:#ef4444;
+  --txt:#0f172a;--mut:#64748b;--faint:#94a3b8;
+  --brd:#e2e8f0;--page:#f1f5f9;--card:#ffffff;
   --mono:'JetBrains Mono',monospace;
   --num:'Plus Jakarta Sans',sans-serif;
+  --emerald:#10b981;--emerald-dim:rgba(16,185,129,0.12);--emerald-glow:rgba(16,185,129,0.3);
+  --crimson:#ef4444;--crimson-dim:rgba(239,68,68,0.10);--crimson-glow:rgba(239,68,68,0.25);
+  --amber-dim:rgba(245,158,11,0.10);
+  --slate-900:#0f172a;--slate-800:#1e293b;--slate-700:#334155;--slate-500:#64748b;--slate-200:#e2e8f0;--slate-100:#f1f5f9;--slate-50:#f8fafc;
+  --radius-lg:20px;--radius-md:14px;--radius-sm:10px;
+  --shadow-card:0 1px 3px rgba(15,23,42,0.06),0 4px 16px rgba(15,23,42,0.06);
+  --shadow-hero:0 0 0 1px rgba(16,185,129,0.15),0 4px 32px rgba(16,185,129,0.12);
 }
 body{font-family:'DM Sans',sans-serif;background:var(--page);color:var(--txt);display:flex;min-height:100vh;overflow:auto;}
 .page{display:none;width:100%;min-height:100vh;}
@@ -70,7 +77,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--page);color:var(--txt);di
 .fair-txt strong{color:#fff;font-weight:700;}
 
 /* ── UPLOAD PAGE ──────────────────────────────────────────── */
-#page-upload{flex-direction:column;background:var(--page);overflow-y:auto;}
+/* #page-upload defined in layout block above */
 .hero{
   flex:none;width:100%;background:var(--gbg);position:relative;overflow:hidden;
   display:flex;align-items:center;justify-content:center;
@@ -85,134 +92,313 @@ body{font-family:'DM Sans',sans-serif;background:var(--page);color:var(--txt);di
 }
 .btn-back:hover{background:rgba(255,255,255,0.18);border-color:rgba(255,255,255,0.4);}
 .btn-back svg{width:15px;height:15px;}
-.content-row{display:flex;flex:1;min-height:0;overflow:auto;}
-
-/* LEFT panel */
-.rp{
-  width:340px;flex-shrink:0;padding:32px 24px;display:flex;flex-direction:column;gap:14px;
-  overflow-y:auto;border-right:1px solid var(--brd);background:var(--page);
+/* ── PAGE UPLOAD: side-by-side, both panels scroll independently ── */
+#page-upload{
+  flex-direction:column;background:var(--page);
+  overflow:hidden;height:100vh;
 }
-.pt{font-family:'Syne',sans-serif;font-size:18px;font-weight:700;letter-spacing:-0.02em;margin-bottom:2px;}
-.ps{font-size:12px;color:var(--mut);margin-bottom:4px;line-height:1.5;}
+/* The hero header is flex-none; content-row fills the rest */
+.content-row{
+  display:flex;flex:1;min-height:0;min-width:0;
+  overflow:hidden;
+}
 
-/* RIGHT wrapper */
-#rl-wrapper{flex:1;min-width:0;overflow:auto;padding:28px 28px;display:none;background:var(--page);}
-#rl-wrapper.visible{display:flex;flex-direction:column;}
-#rl-title{font-family:'Syne',sans-serif;font-size:18px;font-weight:700;letter-spacing:-0.02em;margin-bottom:14px;flex-shrink:0;}
-#results-panel{flex:1;display:flex;flex-direction:column;min-height:0;overflow:auto;}
-#rl-and-acoustic{display:flex;flex-direction:row;gap:20px;flex:1;min-height:0;overflow:auto;align-items:flex-start;padding-top:2px;}
-
-/* Result card column */
-#rl{
-  width:360px;flex-shrink:0;display:flex;flex-direction:column;gap:14px;min-width:0;
-  overflow-y:auto;max-height:calc(100vh - 160px);padding-right:4px;
+/* LEFT sidebar — fixed height, own scroll */
+.rp{
+  width:320px;flex-shrink:0;padding:26px 22px;
+  display:flex;flex-direction:column;gap:16px;
+  overflow-y:auto;overflow-x:hidden;
+  border-right:1px solid var(--brd);background:var(--page);
   scrollbar-width:thin;scrollbar-color:var(--brd) transparent;
 }
-#rl::-webkit-scrollbar{width:4px;}
-#rl::-webkit-scrollbar-track{background:transparent;}
-#rl::-webkit-scrollbar-thumb{background:var(--brd);border-radius:99px;}
+.rp::-webkit-scrollbar{width:4px;}
+.rp::-webkit-scrollbar-thumb{background:var(--brd);border-radius:99px;}
+.pt{font-family:'Syne',sans-serif;font-size:18px;font-weight:700;letter-spacing:-0.02em;margin-bottom:2px;}
+.ps{font-size:13px;color:var(--mut);margin-bottom:4px;line-height:1.5;}
 
-/* Acoustic/Analysis panel */
+/* RIGHT wrapper — fills space, scrolls independently */
+#rl-wrapper{
+  flex:1;min-width:0;
+  overflow-y:auto;overflow-x:hidden;
+  padding:20px 20px 48px;
+  display:none;background:var(--page);
+  scrollbar-width:thin;scrollbar-color:var(--brd) transparent;
+}
+#rl-wrapper::-webkit-scrollbar{width:5px;}
+#rl-wrapper::-webkit-scrollbar-thumb{background:var(--brd);border-radius:99px;}
+#rl-wrapper.visible{display:block;}
+#rl-title{font-family:'Syne',sans-serif;font-size:17px;font-weight:700;letter-spacing:-0.02em;margin-bottom:14px;}
+#results-panel{display:flex;flex-direction:column;}
+
+/* Result cards + section panel: side-by-side, collapse when too narrow */
+#rl-and-acoustic{
+  display:flex;flex-direction:row;gap:16px;align-items:flex-start;padding-top:2px;
+  min-width:0;
+}
+
+/* Result card column — fluid, never overflows */
+#rl{
+  width:clamp(280px,38%,400px);flex-shrink:0;flex-grow:0;
+  display:flex;flex-direction:column;gap:14px;min-width:0;overflow:hidden;
+}
+
+/* Section analysis panel — fills remaining space */
 #acoustic-panel{
-  flex:1;min-width:240px;background:var(--card);border-radius:18px;border:1px solid var(--brd);
+  flex:1;min-width:0;background:var(--card);border-radius:18px;border:1px solid var(--brd);
   box-shadow:0 2px 16px rgba(0,0,0,0.07);overflow:hidden;display:none;flex-direction:column;
-  max-height:calc(100vh - 200px);
 }
 #acoustic-panel.visible{display:flex;}
 #acoustic-content{
   padding:12px 14px 14px;display:flex;flex-direction:column;gap:8px;
-  overflow-y:auto;overflow-x:hidden;flex:1;min-height:0;
-  scrollbar-width:thin;scrollbar-color:var(--brd) transparent;
+  overflow-y:visible;overflow-x:hidden;
 }
-#acoustic-content::-webkit-scrollbar{width:4px;}
-#acoustic-content::-webkit-scrollbar-track{background:transparent;}
-#acoustic-content::-webkit-scrollbar-thumb{background:var(--brd);border-radius:99px;}
 .acoustic-header{
   padding:13px 16px;border-bottom:1px solid var(--brd);
-  display:flex;align-items:center;gap:8px;flex-shrink:0;
+  display:flex;align-items:center;gap:8px;flex-shrink:0;flex-wrap:wrap;
 }
 .acoustic-header-pill{font-size:8px;font-weight:700;letter-spacing:0.1em;background:var(--txt);color:#fff;border-radius:4px;padding:3px 8px;text-transform:uppercase;}
 .acoustic-header-title{font-size:13px;font-weight:700;}
 .acoustic-header-count{font-size:10.5px;color:var(--mut);margin-left:auto;}
 
-/* Responsive */
-@media(max-width:1400px){.rp{width:300px;padding:28px 22px;}#rl-wrapper{padding:24px 24px;}#rl{width:340px;}}
-@media(max-width:1200px){.rp{width:280px;padding:24px 20px;}#rl-wrapper{padding:22px 20px;}#rl{width:100%;max-width:100%;}#acoustic-panel{min-width:0;}}
+/* vc-body expands naturally, right panel scroll handles it */
+.vc-body{overflow-y:visible!important;max-height:none!important;}
+
+/* ══════════════════════════════════════════════════════════════
+   RESPONSIVE — Mobile-first, covers all breakpoints
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── 1280px — large desktop: no changes needed ── */
+
+/* ── 1100px — medium desktop ── */
+@media(max-width:1100px){
+  #rl{width:clamp(260px,35%,340px);}
+  .rp{width:290px;}
+}
+
+/* ── 1050px — split-window / narrow browser threshold ── */
 @media(max-width:1050px){
-  #rl-and-acoustic{flex-direction:column;overflow-y:auto;max-height:calc(100vh - 160px);gap:16px;}
-  #rl{width:100%;max-width:100%;overflow-y:visible;max-height:none;height:auto;padding-right:0;}
-  #acoustic-panel{width:100%;min-height:400px;max-height:600px;flex-shrink:0;display:flex;}
-  #acoustic-panel.visible{display:flex;}
-  .vc-body{height:auto;max-height:none;overflow-y:visible;}
+  #rl-and-acoustic{flex-direction:column;}
+  #rl{width:100%;max-width:100%;}
+  #acoustic-panel{width:100%;}
 }
-@media(max-width:780px){
-  body{overflow-y:auto;}#page-upload{height:auto;overflow-y:auto;}
-  .content-row{flex-direction:column;overflow-y:auto;height:auto;}
-  .rp{width:100%;flex-shrink:0;border-right:none;border-bottom:1px solid var(--brd);padding:20px 18px;}
-  #rl-wrapper{padding:18px 16px;}
-  #rl-and-acoustic{flex-direction:column;overflow-y:visible;max-height:none;}
-  #rl{max-height:none;overflow-y:visible;width:100%;}
-  #acoustic-panel{max-height:none;width:100%;}
-  .vc-body{max-height:none;overflow-y:visible;}
-  #page-landing{padding:48px 28px;}#page-landing h1{font-size:clamp(32px,8vw,52px);}
-  #page-landing p{font-size:15px;}.hero h1{font-size:clamp(16px,4vw,28px);}
+
+/* ── 900px — small desktop / large tablet ── */
+@media(max-width:900px){
+  #rl-and-acoustic{flex-direction:column;}
+  #rl{width:100%;}
+  .rp{width:240px;padding:18px 14px;}
+  #acoustic-panel{width:100%;}
+}
+
+/* ── 720px — tablet landscape ── */
+@media(max-width:720px){
+  #page-upload{overflow-y:auto;height:auto;}
+  .content-row{flex-direction:column;overflow:visible;flex:none;}
+  .rp{width:100%;border-right:none;border-bottom:1px solid var(--brd);overflow-y:visible;height:auto;padding:16px;}
+  #rl-wrapper{overflow-y:visible;padding:14px 14px 36px;}
+  #page-landing{padding:48px 28px;}
+  #page-landing h1{font-size:clamp(32px,8vw,52px);}
+  #page-landing p{font-size:15px;}
+  .hero h1{font-size:clamp(16px,4vw,28px);}
   .btn-back{top:16px;left:16px;font-size:12px;padding:7px 12px;}
+  .score-comp-meta{grid-template-columns:1fr;}
+  .conf-scores-row{gap:10px;}
+  .how-grid{grid-template-columns:1fr;}
 }
+
+/* ── 600px — tablet portrait / large phone ── */
 @media(max-width:600px){
-  .rp{padding:16px 14px;}#rl-wrapper{padding:14px 12px;}
-  .vc-score{gap:12px;padding:16px 14px 14px;}.sr-big-pct{font-size:26px;}.gw{width:72px;}
-  .vc-topbar{gap:4px;padding:0 14px 12px;}.fmt-tag,.conversion-badge{font-size:8px;padding:3px 7px;}
-  .btn-report{font-size:9.5px;padding:4px 8px;}.genre-main-name{font-size:13px;}
-  .blend-row{padding:14px 16px;}#acoustic-panel{min-height:300px;}
-  #page-landing{padding:40px 20px;}#page-landing h1{font-size:clamp(28px,7vw,44px);}
+  /* Layout */
+  .rp{padding:14px 12px;}
+  #rl-wrapper{padding:12px 12px 32px;}
+
+  /* Landing */
+  #page-landing{padding:40px 20px;}
+  #page-landing h1{font-size:clamp(28px,7vw,44px);}
+  .fmt-badge{padding:8px 18px;}
+
+  /* Hero */
+  .hero{padding:24px 16px;}
+  .hero h1{font-size:clamp(15px,3.5vw,26px);}
+
+  /* Song banner */
+  .song-banner{flex-direction:column;align-items:flex-start;gap:10px;padding:14px 14px 12px;}
+  .song-banner-chips{width:100%;flex-wrap:wrap;}
+  .song-banner-bars{display:none;}
+  .song-banner-title{font-size:15px;white-space:normal;}
+
+  /* Verdict hero */
+  .verdict-hero-bg{padding:18px 16px 16px;}
+  .verdict-gauge-row{padding:12px 14px;gap:10px;flex-wrap:wrap;}
+  .verdict-gauge-item{min-width:calc(50% - 10px);}
+  .verdict-gauge-value{font-size:20px;}
+  .verdict-title{font-size:18px;}
+
+  /* Confidence meter */
+  .conf-scores-row{gap:8px;}
+  .conf-score-value{font-size:18px;}
+
+  /* Section cards */
+  .sec-card-main{padding:11px 12px;gap:9px;}
+  .sec-card-name{font-size:12px;}
+
+  /* How-we-analyze */
+  .how-grid{grid-template-columns:1fr;}
+
+  /* Score comp */
+  .score-comp-meta{grid-template-columns:1fr;}
+  .score-comp-card{padding:14px 14px 16px;}
+
+  /* Genre */
+  .genre-card{padding:14px 14px 16px;}
+  .genre-main-name{font-size:17px;}
+
+  /* Misc */
+  .blend-row{padding:14px 16px;}
+  .btn-report{font-size:9.5px;padding:4px 8px;}
+  .fmt-tag,.conversion-badge{font-size:8px;padding:3px 7px;}
+  .vc-score{gap:12px;padding:16px 14px 14px;}
+  .sr-big-pct{font-size:26px;}
+  .gw{width:72px;}
+  .vc-topbar{gap:4px;padding:0 14px 12px;}
 }
+
+/* ── 480px — standard mobile ── */
 @media(max-width:480px){
-  body{font-size:14px;}.rp{padding:14px 12px;}#rl-wrapper{padding:12px 10px;}
-  .hero{padding:22px 16px;}.hero h1{font-size:clamp(14px,3.5vw,22px);}
+  body{font-size:14px;}
+
+  /* Layout */
+  .rp{padding:12px 10px;}
+  #rl-wrapper{padding:10px 10px 28px;}
+
+  /* Hero */
+  .hero{padding:20px 14px;}
+  .hero h1{font-size:clamp(13px,3.2vw,20px);}
   .hero-ico{width:40px!important;height:40px!important;}
-  .btn-back{top:14px;left:12px;font-size:11px;padding:6px 10px;}.btn-back svg{width:12px;height:12px;}
+  .btn-back{top:14px;left:12px;font-size:11px;padding:6px 10px;}
+  .btn-back svg{width:12px;height:12px;}
+
+  /* Landing */
+  #page-landing{padding:36px 18px;}
+  #page-landing h1{font-size:clamp(26px,7vw,40px);}
+  #page-landing p{font-size:13px;}
+  .fmt-val{font-size:11px;}
+  .btn-start{padding:13px 36px;font-size:14px;}
+  .fair-notice{padding:10px 14px;}
+  .fair-txt{font-size:11px;}
+
+  /* Upload */
+  .dz{padding:24px 14px;}
+  .dz-t{font-size:12px;}
+  .dz-s{font-size:11px;}
+  .btn-a{font-size:12px;padding:11px 14px;}
+  .btn-cl{font-size:11px;padding:11px 10px;}
+  .pt{font-size:16px;}
+  .ps{font-size:11px;}
+
+  /* Verdict gauges stack on mobile */
+  .verdict-gauge-row{flex-direction:column;gap:8px;padding:12px 14px;}
+  .verdict-gauge-item{min-width:unset;width:100%;}
+  .verdict-gauge-divider{width:100%;height:1px;}
+  .verdict-title{font-size:17px;}
+
+  /* Score breakdown */
+  .conf-meter{padding:14px 14px;}
+  .conf-scores-row{gap:6px;}
+  .conf-score-value{font-size:16px;}
+
+  /* Scores */
   .vc-score{flex-direction:column;align-items:flex-start;gap:10px;padding:14px 14px 12px;}
-  .gw{width:60px;}.sr{width:100%;}.sr-big-pct{font-size:28px;}.sr-title{font-size:12px;}
-  .sr-badges{gap:4px;}.sr-badge{font-size:9px;padding:3px 7px;}.vc-fname-full{font-size:11px;}
-  .vc-topbar{padding:0 12px 10px;gap:4px;}.fmt-tag,.conversion-badge{display:none;}
-  .vchip{font-size:9px;padding:3px 7px;}.pt{font-size:16px;}.ps{font-size:11px;}
-  .dz{padding:24px 14px;}.dz-t{font-size:12px;}.dz-s{font-size:11px;}
-  .btn-a{font-size:12px;padding:11px 14px;}.btn-cl{font-size:11px;padding:11px 10px;}
-  .genre-card{padding:12px 14px 14px;}.genre-main-name{font-size:13px;}
-  .genre-row-label{min-width:70px;max-width:100px;font-size:10.5px;}.genre-row-pct{font-size:10.5px;min-width:32px;}
-  .blend-row{padding:12px 14px;}.blend-key{font-size:10px;}.blend-pts{font-size:11px;}
-  #page-landing{padding:36px 18px;}#page-landing h1{font-size:clamp(26px,7vw,40px);}
-  #page-landing p{font-size:13px;}.fmt-val{font-size:11px;}.btn-start{padding:13px 36px;font-size:14px;}
-  .fair-notice{padding:10px 14px;}.fair-txt{font-size:11px;}
+  .gw{width:60px;}
+  .sr{width:100%;}
+  .sr-big-pct{font-size:28px;}
+  .sr-title{font-size:12px;}
+  .sr-badges{gap:4px;}
+  .sr-badge{font-size:9px;padding:3px 7px;}
+  .vc-fname-full{font-size:11px;}
+  .vc-topbar{padding:0 12px 10px;gap:4px;}
+  .fmt-tag,.conversion-badge{display:none;}
+  .vchip{font-size:9px;padding:3px 7px;}
+
+  /* Cards */
+  .genre-card{padding:12px 12px 14px;}
+  .genre-main-name{font-size:16px;}
+  .genre-row-label{min-width:70px;max-width:100px;font-size:10.5px;}
+  .genre-row-pct{font-size:10.5px;min-width:32px;}
+  .score-comp-card{padding:12px 12px 14px;}
+  .blend-row{padding:12px 14px;}
+  .blend-key{font-size:10px;}
+  .blend-pts{font-size:11px;}
+
+  /* Song banner */
+  .song-banner{padding:12px 12px 10px;}
+  .song-banner-icon{width:34px;height:34px;border-radius:10px;}
+  .song-banner-title{font-size:13px;}
+
+  /* Grad-CAM */
+  .gradcam-wrap{padding:14px 14px 16px;}
+  .gradcam-title{font-size:12px;}
+
+  /* Instruments */
+  .instr-card{padding:12px 12px 14px;}
+  .instr-title{font-size:12px;}
+
+  /* Audio player mobile */
+  .ap-controls{gap:6px;}
+  .ap-vol{width:40px;}
+  .ap-time{font-size:9px;}
+  .ap-btn{width:30px;height:30px;}
+  .ap-tl-legend{gap:6px;}
+  .ap-tl-legend-item{font-size:7.5px;}
+
+  /* Buttons */
+  .acts{flex-direction:column;}
+  .btn-a,.btn-cl{width:100%;flex:none;}
+
+  /* Acoustic panel */
+  #acoustic-panel{border-radius:14px!important;}
+  .acoustic-header{padding:11px 12px!important;}
+}
+
+/* ── 360px — small mobile (e.g. older Android) ── */
+@media(max-width:360px){
+  #page-landing h1{font-size:clamp(22px,6.5vw,36px);}
+  .btn-start{padding:12px 28px;font-size:13px;}
+  .verdict-title{font-size:15px;}
+  .verdict-gauge-value{font-size:18px;}
+  .song-banner-title{font-size:12px;}
+  .conf-score-value{font-size:15px;}
+  .score-comp-card,.genre-card{padding:10px 10px 12px;}
+  .sec-card-name{font-size:11px;}
 }
 
 /* ── UPLOAD CARD ──────────────────────────────────────────── */
-.uc{background:var(--card);border-radius:18px;padding:20px 18px 16px;box-shadow:0 1px 10px rgba(0,0,0,0.05);border:1px solid var(--brd);}
-.dz{border:2px dashed rgba(23,168,112,0.24);border-radius:13px;padding:32px 18px;text-align:center;cursor:pointer;background:rgba(23,168,112,0.02);transition:border-color 0.17s,background 0.17s;position:relative;}
+.uc{background:var(--card);border-radius:18px;padding:22px 20px 18px;box-shadow:0 1px 10px rgba(0,0,0,0.05);border:1px solid var(--brd);overflow:hidden;box-sizing:border-box;}
+.dz{border:2px dashed rgba(23,168,112,0.24);border-radius:13px;padding:36px 20px;text-align:center;cursor:pointer;background:rgba(23,168,112,0.02);transition:border-color 0.17s,background 0.17s;position:relative;}
 .dz:hover,.dz.ov{border-color:var(--g);background:rgba(23,168,112,0.05);}
 .dz input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
-.dz-ico{width:40px;height:40px;background:rgba(23,168,112,0.1);border-radius:10px;display:flex;align-items:center;justify-content:center;margin:0 auto 10px;}
-.dz-t{font-size:13px;font-weight:600;margin-bottom:3px;}.dz-s{font-size:12px;color:var(--mut);}
+.dz-ico{width:46px;height:46px;background:rgba(23,168,112,0.1);border-radius:12px;display:flex;align-items:center;justify-content:center;margin:0 auto 12px;}
+.dz-t{font-size:14px;font-weight:600;margin-bottom:4px;}.dz-s{font-size:13px;color:var(--mut);}
 .dz-s em{color:var(--g);font-style:normal;font-weight:600;cursor:pointer;}
-.dz-f{margin-top:7px;font-size:10px;color:var(--faint);letter-spacing:0.04em;}
+.dz-f{margin-top:8px;font-size:11px;color:var(--faint);letter-spacing:0.04em;}
 .sw{display:none;}.sw.vis{display:block;}
-.sf{display:flex;align-items:center;gap:10px;background:#eef7f2;border-radius:11px;padding:11px 13px;border:1.5px solid rgba(23,168,112,0.17);transition:all 0.28s;}
+.sf{display:flex;align-items:center;gap:10px;background:#eef7f2;border-radius:11px;padding:12px 14px;border:1.5px solid rgba(23,168,112,0.17);transition:all 0.28s;}
 .sf.an{animation:sfpulse 1.25s ease-in-out infinite;}
 @keyframes sfpulse{0%,100%{border-color:rgba(23,168,112,0.17);background:#eef7f2;}50%{border-color:rgba(23,168,112,0.6);background:#dff0e9;}}
-.sf-ico{width:34px;height:34px;background:rgba(23,168,112,0.11);border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
-.sf-n{font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.sf-m{font-size:10.5px;color:var(--mut);margin-top:1px;font-family:var(--mono);}
+.sf-ico{width:36px;height:36px;background:rgba(23,168,112,0.11);border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.sf-n{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.sf-m{font-size:11px;color:var(--mut);margin-top:1px;font-family:var(--mono);}
 .sf-rm{background:none;border:none;color:#ccc;cursor:pointer;font-size:14px;padding:4px;flex-shrink:0;line-height:1;transition:color 0.13s;margin-left:auto;}
 .sf-rm:hover{color:var(--red);}
-#upload-live-player{margin-top:12px;width:100%;}
-#upload-live-player .ap-wrap{margin:0;width:100%;}
-#upload-live-player .ap-inner{padding:10px 12px 10px;}
-.acts{display:flex;gap:8px;margin-top:13px;}
-.btn-a{flex:1;background:var(--g);color:#fff;border:none;border-radius:11px;font-family:'Syne',sans-serif;font-size:13px;font-weight:700;padding:12px 16px;cursor:pointer;transition:background 0.17s,transform 0.1s;}
+#upload-live-player{margin-top:14px;width:100%;overflow:hidden;box-sizing:border-box;}
+#upload-live-player .ap-wrap{margin:0;width:100%;box-sizing:border-box;}
+#upload-live-player .ap-inner{padding:11px 13px;}
+.acts{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;}
+.btn-a{flex:1;min-width:100px;background:var(--g);color:#fff;border:none;border-radius:11px;font-family:'Syne',sans-serif;font-size:14px;font-weight:700;padding:13px 16px;cursor:pointer;transition:background 0.17s,transform 0.1s;}
 .btn-a:hover:not(:disabled){background:var(--gd);}
 .btn-a:active:not(:disabled){transform:scale(0.98);}
 .btn-a:disabled{background:#d3d8d5;color:#9ca8a3;cursor:not-allowed;}
-.btn-cl{background:transparent;border:1.5px solid var(--brd);border-radius:11px;color:#000;font-family:'DM Sans',sans-serif;font-size:12.5px;font-weight:500;padding:12px 13px;cursor:pointer;transition:border-color 0.17s,color 0.17s;white-space:nowrap;}
+.btn-cl{flex:1;min-width:100px;background:transparent;border:1.5px solid var(--brd);border-radius:11px;color:#000;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;padding:13px 13px;cursor:pointer;transition:border-color 0.17s,color 0.17s;white-space:normal;text-align:center;}
 .btn-cl:hover{border-color:var(--red);color:var(--red);}
 .sb{display:none;align-items:center;gap:9px;background:var(--card);border-radius:11px;padding:11px 14px;font-size:12.5px;color:var(--mut);border:1px solid var(--brd);}
 .sb.on{display:flex;}
@@ -240,7 +426,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--page);color:var(--txt);di
 .btn-report{display:inline-flex;align-items:center;gap:5px;background:none;border:1px solid var(--brd);border-radius:8px;padding:5px 10px;font-size:11px;font-weight:600;color:var(--mut);cursor:pointer;font-family:'DM Sans',sans-serif;transition:border-color 0.14s,color 0.14s,background 0.14s;white-space:nowrap;flex-shrink:0;}
 .btn-report:hover{border-color:#f59e0b;color:#92400e;background:#fffbeb;}
 .btn-report.reported{border-color:rgba(23,168,112,0.3);color:var(--g);background:rgba(23,168,112,0.06);cursor:default;}
-.vc-score{display:flex;align-items:flex-start;gap:16px;padding:20px 20px 18px;}
+.vc-score{display:flex;align-items:center;gap:16px;padding:20px 20px 18px;}
 .gw{flex-shrink:0;width:88px;text-align:center;padding-top:2px;}.gw svg{display:block;margin:0 auto;}
 .gnum{font-family:var(--num);font-size:16px;font-weight:800;line-height:1;margin-top:2px;letter-spacing:-0.02em;}
 .glbl{font-size:8px;color:var(--faint);letter-spacing:0.06em;text-transform:uppercase;margin-top:1px;font-family:var(--mono);}
@@ -254,20 +440,20 @@ body{font-family:'DM Sans',sans-serif;background:var(--page);color:var(--txt);di
 .sr-badge-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0;}
 
 /* ── AUDIO PLAYER ─────────────────────────────────────────── */
-.ap-wrap{margin:0 18px 14px;border:1px solid var(--brd);border-radius:14px;background:#f8fbf9;overflow:hidden;}
+.ap-wrap{margin:0 0 14px;border:1px solid var(--brd);border-radius:14px;background:#f8fbf9;overflow:hidden;width:100%;box-sizing:border-box;}
 .ap-inner{padding:12px 14px 10px;display:flex;flex-direction:column;gap:8px;}
-.ap-header{display:flex;align-items:center;gap:8px;}
+.ap-header{display:flex;align-items:center;gap:8px;min-width:0;}
 .ap-icon{width:28px;height:28px;border-radius:8px;background:rgba(23,168,112,0.13);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
-.ap-label{font-size:9px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--g);font-family:var(--mono);}
-.ap-fname{font-size:10.5px;color:var(--mut);font-family:var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;}
-.ap-controls{display:flex;align-items:center;gap:10px;}
+.ap-label{font-size:9px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--g);font-family:var(--mono);flex-shrink:0;}
+.ap-fname{font-size:10.5px;color:var(--mut);font-family:var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0;}
+.ap-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
 .ap-btn{width:34px;height:34px;border-radius:50%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;background:var(--g);color:#fff;flex-shrink:0;transition:background 0.15s,transform 0.1s;}
 .ap-btn:hover{background:var(--gd);}
 .ap-btn:active{transform:scale(0.93);}
-.ap-time{font-family:var(--mono);font-size:10px;color:var(--mut);white-space:nowrap;min-width:70px;text-align:center;}
-.ap-vol-wrap{display:flex;align-items:center;gap:5px;flex-shrink:0;}
-.ap-vol-ico{color:var(--faint);}
-.ap-vol{-webkit-appearance:none;appearance:none;width:60px;height:3px;border-radius:99px;background:var(--brd);outline:none;cursor:pointer;}
+.ap-time{font-family:var(--mono);font-size:10px;color:var(--mut);white-space:nowrap;flex-shrink:0;}
+.ap-vol-wrap{display:flex;align-items:center;gap:5px;flex-shrink:0;margin-left:auto;}
+.ap-vol-ico{color:var(--faint);flex-shrink:0;}
+.ap-vol{-webkit-appearance:none;appearance:none;width:52px;height:3px;border-radius:99px;background:var(--brd);outline:none;cursor:pointer;}
 .ap-vol::-webkit-slider-thumb{-webkit-appearance:none;width:11px;height:11px;border-radius:50%;background:var(--g);cursor:pointer;}
 /* Waveform visualizer canvas */
 .ap-viz-wrap{position:relative;border-radius:8px;overflow:hidden;height:48px;background:#eef7f2;cursor:pointer;}
@@ -354,37 +540,37 @@ body{font-family:'DM Sans',sans-serif;background:var(--page);color:var(--txt);di
 .conversion-note span{display:flex;align-items:center;gap:6px;}
 
 /* ── GENRE ────────────────────────────────────────────────── */
-.genre-card{padding:16px 20px 18px;border-bottom:1px solid var(--brd);}
-.genre-header{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap;}
-.genre-pill{font-family:var(--mono);font-size:7px;font-weight:700;letter-spacing:0.14em;background:var(--g);color:#fff;border-radius:4px;padding:3px 9px;text-transform:uppercase;flex-shrink:0;}
+.genre-card{padding:18px 20px 20px;background:#fff;border-radius:14px;border:1px solid var(--brd);box-shadow:0 1px 3px rgba(15,23,42,0.06);}
+.genre-header{display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap;}
+.genre-pill{font-family:'DM Sans',sans-serif;font-size:9px;font-weight:700;letter-spacing:0.08em;background:var(--g);color:#fff;border-radius:4px;padding:3px 9px;text-transform:uppercase;flex-shrink:0;}
 .genre-title-row{display:flex;align-items:center;gap:8px;flex:1;flex-wrap:wrap;}
-.genre-main-name{font-family:'Syne',sans-serif;font-size:15px;font-weight:800;color:var(--txt);letter-spacing:-0.02em;}
-.genre-conf-note{font-family:var(--mono);font-size:9px;color:var(--faint);font-style:italic;margin-left:auto;}
-.genre-top-chip{display:inline-flex;align-items:center;gap:5px;border-radius:6px;padding:4px 10px;font-family:var(--mono);font-size:9.5px;font-weight:700;background:rgba(23,168,112,0.1);color:var(--gd);border:1px solid rgba(23,168,112,0.2);}
-.genre-top-pct{font-family:var(--mono);font-size:9px;font-weight:600;opacity:0.75;}
-.genre-sub-chip{display:inline-flex;align-items:center;gap:4px;border-radius:6px;padding:3px 9px;font-family:var(--mono);font-size:9.5px;font-weight:600;background:rgba(23,168,112,0.06);color:var(--mut);border:1px solid var(--brd);}
+.genre-main-name{font-family:'DM Sans',sans-serif;font-size:20px;font-weight:700;color:var(--txt);letter-spacing:-0.02em;}
+.genre-conf-note{font-family:'DM Sans',sans-serif;font-size:10px;color:var(--faint);font-style:italic;margin-left:auto;}
+.genre-top-chip{display:inline-flex;align-items:center;gap:5px;border-radius:6px;padding:4px 10px;font-family:'DM Sans',sans-serif;font-size:10px;font-weight:600;background:rgba(23,168,112,0.1);color:var(--gd);border:1px solid rgba(23,168,112,0.2);}
+.genre-top-pct{font-family:'DM Sans',sans-serif;font-size:9px;font-weight:600;opacity:0.75;}
+.genre-sub-chip{display:inline-flex;align-items:center;gap:4px;border-radius:6px;padding:3px 9px;font-family:'DM Sans',sans-serif;font-size:10px;font-weight:600;background:rgba(23,168,112,0.06);color:var(--mut);border:1px solid var(--brd);}
 .genre-sub-chip strong{color:var(--txt);font-family:'DM Sans',sans-serif;font-weight:600;}
 .genre-bars{display:flex;flex-direction:column;gap:9px;margin-top:10px;}
 .genre-row{display:flex;align-items:center;gap:10px;}
 .genre-row-label{font-family:'DM Sans',sans-serif;font-size:12px;font-weight:500;color:var(--txt);min-width:100px;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;letter-spacing:-0.01em;}
 .genre-row-bar-wrap{flex:1;height:5px;background:#eaeeec;border-radius:99px;overflow:hidden;}
 .genre-row-bar{height:100%;border-radius:99px;width:0%;transition:width 1.2s cubic-bezier(0.22,1,0.36,1);}
-.genre-row-pct{font-family:'Plus Jakarta Sans',sans-serif;font-size:11.5px;font-weight:800;color:var(--mut);min-width:38px;text-align:right;letter-spacing:-0.02em;}
-.genre-row.top .genre-row-label{font-family:'Plus Jakarta Sans',sans-serif;font-weight:700;color:var(--gd);letter-spacing:-0.02em;}
+.genre-row-pct{font-family:'DM Sans',sans-serif;font-size:12px;font-weight:700;color:var(--mut);min-width:38px;text-align:right;letter-spacing:-0.01em;}
+.genre-row.top .genre-row-label{font-family:'DM Sans',sans-serif;font-weight:700;color:var(--gd);letter-spacing:-0.01em;}
 .genre-row.top .genre-row-pct{color:var(--gd);}
 .genre-row.top .genre-row-bar{background:var(--g);}
 .genre-row:not(.top) .genre-row-bar{background:#b4c5bc;}
 .genre-subgenres{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;padding-left:2px;}
-.genre-sub-tag{font-family:var(--mono);font-size:9px;color:var(--mut);background:#f0f4f2;border:1px solid var(--brd);border-radius:4px;padding:2px 8px;letter-spacing:0.02em;}
+.genre-sub-tag{font-family:'DM Sans',sans-serif;font-size:10px;color:var(--mut);background:#f0f4f2;border:1px solid var(--brd);border-radius:4px;padding:2px 8px;letter-spacing:0em;}
 .genre-sub-tag.top-sub{color:var(--gd);background:rgba(23,168,112,0.08);border-color:rgba(23,168,112,0.22);font-weight:600;}
 .genre-meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;padding-top:10px;border-top:1px solid var(--brd);}
-.genre-meta-item{font-family:var(--mono);font-size:9px;color:var(--faint);display:flex;align-items:center;gap:4px;letter-spacing:0.02em;}
+.genre-meta-item{font-family:'DM Sans',sans-serif;font-size:10px;color:var(--faint);display:flex;align-items:center;gap:4px;}
 .genre-meta-item strong{font-family:'DM Sans',sans-serif;color:var(--mut);font-weight:600;}
 /* ── Instrument analysis card ── */
 .instr-card{padding:16px 20px 18px;border-bottom:1px solid var(--brd);}
 .instr-header{display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap;}
-.instr-pill{font-family:var(--mono);font-size:7px;font-weight:700;letter-spacing:0.14em;background:#6366f1;color:#fff;border-radius:4px;padding:3px 9px;text-transform:uppercase;flex-shrink:0;}
-.instr-title{font-family:'Syne',sans-serif;font-size:14px;font-weight:800;color:var(--txt);letter-spacing:-0.02em;}
+.instr-pill{font-family:'DM Sans',sans-serif;font-size:9px;font-weight:700;letter-spacing:0.08em;background:#6366f1;color:#fff;border-radius:4px;padding:3px 9px;text-transform:uppercase;flex-shrink:0;}
+.instr-title{font-family:'DM Sans',sans-serif;font-size:14px;font-weight:600;color:var(--txt);letter-spacing:-0.01em;}
 .instr-summary-chip{display:inline-flex;align-items:center;gap:5px;border-radius:6px;padding:4px 10px;font-family:var(--mono);font-size:9px;font-weight:700;margin-left:auto;}
 .instr-summary-chip.ai{background:rgba(239,68,68,0.1);color:#b91c1c;border:1px solid rgba(239,68,68,0.2);}
 .instr-summary-chip.real{background:rgba(22,163,74,0.1);color:#15803d;border:1px solid rgba(22,163,74,0.2);}
@@ -393,7 +579,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--page);color:var(--txt);di
 .instr-row{background:var(--card);border-radius:12px;padding:12px 14px;border:1px solid var(--brd);transition:border-color 0.15s,box-shadow 0.15s;}
 .instr-row:hover{border-color:#b8d4cc;box-shadow:0 2px 10px rgba(0,0,0,0.05);}
 .instr-row-top{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
-.instr-name{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;color:var(--txt);flex:1;letter-spacing:-0.01em;}
+.instr-name{font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;color:var(--txt);flex:1;letter-spacing:-0.01em;}
 .instr-tag-score{font-family:var(--mono);font-size:8.5px;color:var(--faint);letter-spacing:0.02em;}
 .instr-verdict-chip{font-family:var(--mono);font-size:8px;font-weight:700;border-radius:4px;padding:2px 8px;letter-spacing:0.05em;text-transform:uppercase;}
 .instr-verdict-chip.ai{background:rgba(239,68,68,0.1);color:#b91c1c;border:1px solid rgba(239,68,68,0.18);}
@@ -420,7 +606,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--page);color:var(--txt);di
 .stability-pip{width:10px;height:5px;border-radius:2px;background:#e3ebe7;}
 .stability-pip.on{background:var(--g);}
 .div{height:1px;background:var(--brd);}
-.vc-foot{padding:14px 20px;display:flex;align-items:center;gap:5px;font-size:10px;color:var(--faint);border-top:1px solid var(--brd);margin-top:2px;font-family:var(--mono);}
+.vc-foot{padding:16px 22px 20px;display:flex;align-items:center;gap:6px;font-size:10.5px;color:var(--faint);border-top:1px solid var(--brd);margin-top:4px;font-family:'DM Sans',sans-serif;background:#fafcfb;border-radius:0 0 14px 14px;}
 .vc-body{overflow-y:auto;max-height:calc(100vh - 700px);scrollbar-width:thin;scrollbar-color:var(--brd) transparent;}
 .vc-body::-webkit-scrollbar{width:4px;}
 .vc-body::-webkit-scrollbar-track{background:transparent;}
@@ -478,9 +664,9 @@ body{font-family:'DM Sans',sans-serif;background:var(--page);color:var(--txt);di
 /* ── GRAD-CAM ─────────────────────────────────────────────── */
 .gradcam-wrap{padding:18px 22px 22px;border-top:1px solid var(--brd);}
 .gradcam-header{display:flex;align-items:center;gap:10px;margin-bottom:6px;}
-.gradcam-pill{font-family:var(--mono);font-size:7px;font-weight:700;letter-spacing:0.14em;background:#6d28d9;color:#fff;border-radius:4px;padding:3px 9px;text-transform:uppercase;flex-shrink:0;}
-.gradcam-title{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;color:var(--txt);letter-spacing:-0.01em;}
-.gradcam-subtitle{font-family:'DM Sans',sans-serif;font-size:11px;color:var(--mut);line-height:1.65;font-weight:400;margin-bottom:10px;}
+.gradcam-pill{font-family:'DM Sans',sans-serif;font-size:9px;font-weight:700;letter-spacing:0.08em;background:#6d28d9;color:#fff;border-radius:4px;padding:3px 9px;text-transform:uppercase;flex-shrink:0;}
+.gradcam-title{font-family:'DM Sans',sans-serif;font-size:14px;font-weight:600;color:var(--txt);letter-spacing:-0.01em;}
+.gradcam-subtitle{font-family:'DM Sans',sans-serif;font-size:11.5px;color:var(--mut);line-height:1.65;font-weight:400;margin-bottom:10px;}
 .gradcam-canvas-wrap{position:relative;border-radius:10px;overflow:hidden;border:1px solid var(--brd);background:#0f1a14;}
 .gradcam-canvas{display:block;width:100%;height:auto;image-rendering:pixelated;}
 .gradcam-axis-t{display:flex;justify-content:space-between;margin-top:5px;font-family:var(--mono);font-size:8px;color:var(--faint);letter-spacing:0.02em;}
@@ -545,11 +731,11 @@ body{font-family:'DM Sans',sans-serif;background:var(--page);color:var(--txt);di
   transition:width 0.65s cubic-bezier(0.22,1,0.36,1);
 }
 .lo-title{
-  font-family:'Syne',sans-serif;font-size:16px;font-weight:800;
-  color:var(--txt);letter-spacing:-0.03em;margin-bottom:4px;text-align:center;
+  font-family:'DM Sans',sans-serif;font-size:16px;font-weight:700;
+  color:var(--txt);letter-spacing:-0.01em;margin-bottom:4px;text-align:center;
 }
 .lo-file{
-  font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--mut);
+  font-family:'DM Sans',sans-serif;font-size:11px;color:var(--mut);
   max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
   text-align:center;margin-bottom:20px;
 }
@@ -580,7 +766,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--page);color:var(--txt);di
 .lo-step.active .lo-step-lbl{color:var(--txt);font-weight:600;}
 .lo-step.done .lo-step-lbl{color:var(--mut);}
 .lo-step-pct{
-  font-family:'Plus Jakarta Sans',sans-serif;font-size:10px;font-weight:800;
+  font-family:'DM Sans',sans-serif;font-size:10px;font-weight:700;
   color:var(--faint);opacity:0;transition:opacity 0.25s,color 0.25s;min-width:28px;text-align:right;
 }
 .lo-step.done .lo-step-pct{opacity:1;color:var(--g);}
@@ -591,7 +777,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--page);color:var(--txt);di
 }
 .lo-eta{
   font-size:10.5px;color:var(--faint);
-  font-family:'JetBrains Mono',monospace;letter-spacing:0.02em;
+  font-family:'DM Sans',sans-serif;letter-spacing:0em;
 }
 .lo-status-dot{
   width:6px;height:6px;border-radius:50%;background:var(--g);
@@ -713,6 +899,196 @@ body{font-family:'DM Sans',sans-serif;background:var(--page);color:var(--txt);di
   font-family:'JetBrains Mono',monospace;font-size:7.5px;color:var(--faint);
 }
 .lo-scanner-legend-dot{width:7px;height:7px;border-radius:2px;flex-shrink:0;}
+
+/* ═══════════════════════════════════════════════════════════════
+   PREMIUM REDESIGN — Result Card, Hero Verdict & Section Analysis
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Override old result card to transparent shell */
+.vc{background:transparent!important;border:none!important;box-shadow:none!important;border-radius:0!important;display:flex;flex-direction:column;gap:8px;}
+.vc-stripe{display:none!important;}
+.vc-body{overflow-y:visible!important;max-height:none!important;}
+
+/* ── VERDICT HERO CARD ──────────────────────────────────────── */
+.verdict-hero{border-radius:20px;overflow:hidden;box-shadow:0 4px 32px rgba(0,0,0,0.18);animation:fu 0.5s cubic-bezier(0.22,1,0.36,1) both;}
+.verdict-hero-bg{padding:24px 24px 20px;display:flex;flex-direction:column;gap:16px;position:relative;}
+.verdict-hero.is-human .verdict-hero-bg{background:linear-gradient(135deg,#064e3b 0%,#065f46 45%,#047857 100%);}
+.verdict-hero.is-ai .verdict-hero-bg{background:linear-gradient(135deg,#450a0a 0%,#7f1d1d 45%,#991b1b 100%);}
+.verdict-hero.is-unsure .verdict-hero-bg{background:linear-gradient(135deg,#451a03 0%,#78350f 45%,#92400e 100%);}
+.verdict-hero-top{display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap;}
+.verdict-icon-wrap{width:56px;height:56px;border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:26px;background:rgba(255,255,255,0.15);border:1.5px solid rgba(255,255,255,0.25);box-shadow:0 4px 16px rgba(0,0,0,0.2);}
+.verdict-headline{flex:1;min-width:160px;}
+.verdict-label{font-size:9px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:rgba(255,255,255,0.6);font-family:'DM Sans',sans-serif;margin-bottom:5px;}
+.verdict-title{font-family:'DM Sans',sans-serif;font-size:clamp(17px,2.3vw,24px);font-weight:700;color:#fff;letter-spacing:-0.01em;line-height:1.25;margin-bottom:8px;}
+.verdict-trust-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.trust-badge{display:inline-flex;align-items:center;gap:4px;padding:4px 9px;border-radius:7px;font-size:10px;font-weight:600;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:rgba(255,255,255,0.85);}
+.verdict-gauge-row{display:flex;align-items:stretch;background:rgba(0,0,0,0.22);border-radius:12px;padding:14px 18px;gap:16px;flex-wrap:wrap;overflow:hidden;}
+.verdict-gauge-item{display:flex;flex-direction:column;gap:2px;flex:1;min-width:80px;overflow:hidden;}
+.verdict-gauge-label{font-size:8.5px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:rgba(255,255,255,0.5);font-family:var(--mono);}
+.verdict-gauge-value{font-family:'Plus Jakarta Sans',sans-serif;font-size:24px;font-weight:800;color:#fff;letter-spacing:-0.04em;line-height:1;}
+.verdict-gauge-sub{font-size:10.5px;color:rgba(255,255,255,0.6);}
+.verdict-gauge-bar{height:3px;border-radius:99px;background:rgba(255,255,255,0.12);margin-top:5px;overflow:hidden;}
+.verdict-gauge-fill{height:100%;border-radius:99px;transition:width 1.3s cubic-bezier(0.22,1,0.36,1);width:0%;}
+.is-human .verdict-gauge-fill{background:linear-gradient(90deg,#34d399,#10b981);}
+.is-ai .verdict-gauge-fill{background:linear-gradient(90deg,#fca5a5,#ef4444);}
+.is-unsure .verdict-gauge-fill{background:linear-gradient(90deg,#fcd34d,#f59e0b);}
+.verdict-gauge-divider{width:1px;background:rgba(255,255,255,0.12);flex:none;align-self:stretch;}
+.verdict-explanation{background:rgba(0,0,0,0.18);border-radius:10px;padding:13px 15px;display:flex;gap:9px;align-items:flex-start;}
+.verdict-explanation-icon{font-size:15px;flex-shrink:0;margin-top:1px;}
+.verdict-explanation-text{font-size:12px;color:rgba(255,255,255,0.82);line-height:1.7;}
+
+/* ── CONFIDENCE METER ───────────────────────────────────────── */
+.conf-meter{background:#fff;border-radius:14px;border:1px solid var(--brd);box-shadow:0 1px 3px rgba(15,23,42,0.06),0 4px 16px rgba(15,23,42,0.06);padding:16px 18px;}
+.conf-meter-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+.conf-meter-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:var(--mut);font-family:var(--mono);}
+.conf-level-badge{font-size:10px;font-weight:700;font-family:var(--mono);padding:3px 10px;border-radius:6px;letter-spacing:0.05em;}
+.conf-high{background:rgba(16,185,129,0.1);color:#065f46;border:1px solid rgba(16,185,129,0.2);}
+.conf-med{background:rgba(245,158,11,0.1);color:#78350f;border:1px solid rgba(245,158,11,0.2);}
+.conf-low{background:rgba(239,68,68,0.08);color:#7f1d1d;border:1px solid rgba(239,68,68,0.15);}
+.conf-scores-row{display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:center;}
+.conf-score-block{display:flex;flex-direction:column;gap:2px;}
+.conf-score-label{font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;font-family:var(--mono);}
+.conf-score-value{font-family:'Plus Jakarta Sans',sans-serif;font-size:22px;font-weight:800;letter-spacing:-0.04em;line-height:1;}
+.conf-score-bar{height:4px;border-radius:99px;background:var(--slate-100,#f1f5f9);overflow:hidden;margin-top:4px;}
+.conf-score-fill{height:100%;border-radius:99px;transition:width 1.3s cubic-bezier(0.22,1,0.36,1) 0.15s;width:0%;}
+.conf-fill-human{background:var(--emerald,#10b981);}
+.conf-fill-ai{background:var(--crimson,#ef4444);}
+.conf-vs{font-size:9px;font-weight:700;color:var(--faint,#94a3b8);font-family:var(--mono);text-align:center;}
+
+/* ── SECTION TIMELINE CARDS ──────────────────────────────────── */
+.section-timeline-header{display:flex;align-items:center;gap:7px;margin-bottom:2px;}
+.section-timeline-title{font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;color:#0f172a;letter-spacing:-0.01em;}
+.section-timeline-count{font-size:9.5px;color:var(--mut);font-family:'DM Sans',sans-serif;background:#f1f5f9;padding:2px 7px;border-radius:99px;border:1px solid var(--brd);}
+.sec-card{background:#fff;border-radius:14px;border:1.5px solid var(--brd);overflow:hidden;transition:box-shadow 0.2s,transform 0.15s;cursor:pointer;}
+.sec-card:hover{box-shadow:0 4px 20px rgba(15,23,42,0.1);transform:translateY(-1px);}
+.sec-card.is-human-sec{border-left:3px solid #10b981;}
+.sec-card.is-ai-sec{border-left:3px solid #ef4444;}
+.sec-card.is-mixed-sec{border-left:3px solid #f59e0b;}
+.sec-card-main{padding:13px 15px;display:flex;align-items:center;gap:11px;}
+.sec-card-emoji{font-size:19px;flex-shrink:0;}
+.sec-card-info{flex:1;min-width:0;}
+.sec-card-name{font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;color:#0f172a;text-transform:capitalize;letter-spacing:-0.01em;display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap;}
+.sec-impact-badge{font-size:8px;font-weight:700;letter-spacing:0.06em;padding:2px 7px;border-radius:99px;font-family:var(--mono);text-transform:uppercase;flex-shrink:0;}
+.impact-high{background:rgba(109,40,217,0.1);color:#6d28d9;border:1px solid rgba(109,40,217,0.2);}
+.impact-med{background:rgba(37,99,235,0.08);color:#1d4ed8;border:1px solid rgba(37,99,235,0.15);}
+.impact-low{background:#f1f5f9;color:var(--mut);border:1px solid var(--brd);}
+.sec-bar-row{display:flex;align-items:center;gap:7px;margin-top:0;}
+.sec-bar-track{flex:1;height:5px;border-radius:99px;overflow:hidden;background:#f1f5f9;}
+.sec-bar-fill{height:100%;border-radius:99px;transition:width 1s cubic-bezier(0.22,1,0.36,1);width:0%;}
+.sec-bar-fill.human-fill{background:linear-gradient(90deg,#34d399,#10b981);}
+.sec-bar-fill.ai-fill{background:linear-gradient(90deg,#fca5a5,#ef4444);}
+.sec-bar-fill.mixed-fill{background:linear-gradient(90deg,#fcd34d,#f59e0b);}
+.sec-card-right{display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0;}
+.sec-verdict-badge{font-size:9px;font-weight:700;font-family:var(--mono);padding:3px 8px;border-radius:5px;letter-spacing:0.04em;white-space:nowrap;}
+.svb-human{background:rgba(16,185,129,0.1);color:#065f46;border:1px solid rgba(16,185,129,0.2);}
+.svb-ai{background:rgba(239,68,68,0.08);color:#7f1d1d;border:1px solid rgba(239,68,68,0.18);}
+.svb-mixed{background:rgba(245,158,11,0.1);color:#78350f;border:1px solid rgba(245,158,11,0.2);}
+.sec-contrib{font-size:11px;font-weight:700;font-family:'Plus Jakarta Sans',sans-serif;letter-spacing:-0.01em;white-space:nowrap;}
+.sec-confidence-pct{font-size:9px;color:var(--mut);font-family:var(--mono);}
+.sec-details{border-top:1px solid var(--brd);padding:13px 15px;display:none;background:#f8fafc;animation:fadeSlide 0.25s cubic-bezier(0.22,1,0.36,1);}
+@keyframes fadeSlide{from{opacity:0;transform:translateY(-6px);}to{opacity:1;transform:translateY(0);}}
+.sec-card.expanded .sec-details{display:block;}
+.sec-details-title{font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:var(--mut);font-family:var(--mono);margin-bottom:9px;}
+.sec-signals-grid{display:flex;flex-direction:column;gap:5px;}
+.sec-signal-item{display:flex;align-items:flex-start;gap:7px;padding:7px 10px;border-radius:8px;font-size:11.5px;color:#334155;line-height:1.5;}
+.sec-signal-item.sig-human{background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.15);}
+.sec-signal-item.sig-ai{background:rgba(239,68,68,0.05);border:1px solid rgba(239,68,68,0.12);}
+.sec-signal-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;margin-top:4px;}
+.sig-human .sec-signal-dot{background:#10b981;}
+.sig-ai .sec-signal-dot{background:#ef4444;}
+.sec-expand-hint{display:flex;align-items:center;justify-content:center;gap:5px;padding:5px 12px;border-top:1px solid var(--brd);font-size:9px;color:var(--faint);font-family:var(--mono);background:#f8fafc;transition:background 0.15s;letter-spacing:0.04em;user-select:none;}
+.sec-expand-hint svg{transition:transform 0.25s;}
+.sec-card.expanded .sec-expand-hint svg{transform:rotate(180deg);}
+.sec-card:hover .sec-expand-hint{background:#f1f5f9;}
+
+/* ── HOW WE ANALYZE card ──────────────────────────────────────── */
+.how-card{background:#fff;border-radius:14px;border:1px solid var(--brd);box-shadow:0 1px 3px rgba(15,23,42,0.06);overflow:hidden;}
+.how-header{display:flex;align-items:center;gap:10px;padding:13px 15px;cursor:pointer;user-select:none;transition:background 0.15s;}
+.how-header:hover{background:#f8fafc;}
+.how-icon{width:28px;height:28px;border-radius:8px;background:rgba(16,185,129,0.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:13px;}
+.how-title{font-family:'Syne',sans-serif;font-size:12px;font-weight:700;color:#0f172a;letter-spacing:-0.01em;flex:1;}
+.how-chevron{color:var(--faint);transition:transform 0.25s;}
+.how-card.open .how-chevron{transform:rotate(180deg);}
+.how-body{display:none;padding:0 15px 15px;}
+.how-card.open .how-body{display:block;}
+.how-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:6px;}
+.how-item{display:flex;align-items:flex-start;gap:7px;padding:8px 10px;border-radius:8px;background:#f8fafc;border:1px solid var(--brd);font-size:11px;color:#334155;line-height:1.5;}
+.how-item-dot{width:5px;height:5px;border-radius:50%;background:#10b981;flex-shrink:0;margin-top:4px;}
+
+/* ── SCORE COMPOSITION ────────────────────────────────────────── */
+.score-comp-card{background:#fff;border-radius:14px;border:1px solid var(--brd);box-shadow:0 1px 3px rgba(15,23,42,0.06);padding:18px 20px 20px;}
+.score-comp-title{font-family:'Syne',sans-serif;font-size:12px;font-weight:700;letter-spacing:-0.01em;margin-bottom:13px;display:flex;align-items:center;gap:8px;color:#0f172a;}
+.score-comp-tag{font-size:8px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;background:#f1f5f9;color:var(--mut);border-radius:5px;padding:2px 7px;font-family:var(--mono);}
+.score-comp-bar{height:7px;border-radius:99px;overflow:hidden;display:flex;margin-bottom:10px;gap:2px;}
+.score-comp-seg-n{background:#10b981;border-radius:99px 0 0 99px;}
+.score-comp-seg-a{background:#94a3b8;border-radius:0 99px 99px 0;}
+.score-comp-meta{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.score-comp-col{display:flex;flex-direction:column;gap:2px;}
+.score-comp-key{display:flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;color:#0f172a;}
+.score-comp-dot{width:8px;height:8px;border-radius:3px;flex-shrink:0;}
+.score-comp-desc{font-size:10.5px;color:var(--mut);line-height:1.5;}
+.score-comp-pts{font-family:'Plus Jakarta Sans',sans-serif;font-size:13px;font-weight:800;letter-spacing:-0.02em;margin-top:1px;}
+
+/* ── Acoustic panel premium styling ──────────────────────────── */
+#acoustic-panel{background:#f8fafc!important;border:1.5px solid var(--brd)!important;border-radius:20px!important;}
+.acoustic-header{background:#0f172a!important;padding:13px 16px!important;border-bottom:1px solid rgba(255,255,255,0.07)!important;}
+.acoustic-header-pill{background:#10b981!important;color:#fff!important;font-size:7.5px!important;}
+.acoustic-header-title{color:#fff!important;}
+.acoustic-header-count{color:rgba(255,255,255,0.45)!important;}
+
+
+/* ════════════════════════════════════════════════════════════
+   SONG TITLE BANNER
+   ════════════════════════════════════════════════════════════ */
+@keyframes bannerBar{from{transform:scaleY(0.4);}to{transform:scaleY(1.0);}}
+@keyframes bannerFadeIn{from{opacity:0;transform:translateY(-8px);}to{opacity:1;transform:translateY(0);}}
+
+.song-banner{
+  position:relative;overflow:hidden;
+  background:#fff;
+  border-radius:16px;
+  border:1.5px solid var(--brd);
+  border-left:4px solid var(--banner-accent, #10b981);
+  box-shadow:0 1px 4px rgba(15,23,42,0.06),0 6px 20px rgba(15,23,42,0.06);
+  padding:16px 18px 14px;
+  display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+  animation:bannerFadeIn 0.4s cubic-bezier(0.22,1,0.36,1) both;
+  transition:border-left-color 0.3s;
+}
+.song-banner-bars{
+  position:absolute;right:0;top:0;bottom:0;width:160px;
+  display:flex;align-items:flex-end;overflow:hidden;
+  pointer-events:none;
+}
+.song-banner-left{
+  display:flex;align-items:center;gap:12px;flex:1;min-width:0;
+}
+.song-banner-icon{
+  width:42px;height:42px;border-radius:12px;
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;
+  box-shadow:0 2px 10px rgba(0,0,0,0.15);
+  transition:background 0.3s;
+}
+.song-banner-text{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0;}
+.song-banner-label{
+  font-size:9px;font-weight:600;letter-spacing:0.1em;
+  text-transform:uppercase;color:var(--mut);font-family:'DM Sans',sans-serif;
+}
+.song-banner-title{
+  font-family:'DM Sans',sans-serif;
+  font-size:clamp(14px,1.6vw,18px);
+  font-weight:600;
+  color:#0f172a;
+  letter-spacing:-0.01em;
+  line-height:1.25;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.song-banner-chips{
+  display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex-shrink:0;
+}
+
+
 </style>
 </head>
 <body>
@@ -744,27 +1120,27 @@ body{font-family:'DM Sans',sans-serif;background:var(--page);color:var(--txt);di
     <div class="lo-steps">
       <div class="lo-step" id="lo-s1">
         <div class="lo-step-num">1</div>
-        <span class="lo-step-lbl">Decoding &amp; preparing audio</span>
+        <span class="lo-step-lbl">Loading &amp; preparing your track</span>
         <span class="lo-step-pct">20%</span>
       </div>
       <div class="lo-step" id="lo-s2">
         <div class="lo-step-num">2</div>
-        <span class="lo-step-lbl">Extracting mel-spectrogram features</span>
+        <span class="lo-step-lbl">Reading the sound patterns</span>
         <span class="lo-step-pct">40%</span>
       </div>
       <div class="lo-step" id="lo-s3">
         <div class="lo-step-num">3</div>
-        <span class="lo-step-lbl">Running CNN + AST inference</span>
+        <span class="lo-step-lbl">Running the AI detection model</span>
         <span class="lo-step-pct">65%</span>
       </div>
       <div class="lo-step" id="lo-s4">
         <div class="lo-step-num">4</div>
-        <span class="lo-step-lbl">Analysing acoustic features, genre &amp; instruments</span>
+        <span class="lo-step-lbl">Checking rhythm, pitch, genre &amp; instruments</span>
         <span class="lo-step-pct">85%</span>
       </div>
       <div class="lo-step" id="lo-s5">
         <div class="lo-step-num">5</div>
-        <span class="lo-step-lbl">Generating Grad-CAM heatmap</span>
+        <span class="lo-step-lbl">Putting together your results</span>
         <span class="lo-step-pct">100%</span>
       </div>
     </div>
@@ -786,9 +1162,9 @@ body{font-family:'DM Sans',sans-serif;background:var(--page);color:var(--txt);di
       <path d="M20.49 3.51a12 12 0 0 1 0 16.99M3.51 20.49a12 12 0 0 1 0-16.99"/>
     </svg>
   </div>
-  <h1 style="position:relative;z-index:1;">AI Music<br>Detection<br>System</h1>
+  <h1 style="position:relative;z-index:1;">AI Music<br>Detection System</h1>
   <p style="position:relative;z-index:1;">
-    Upload any track and get an instant acoustic breakdown — Human or AI-generated, with full genre classification and signal-level explanations
+    Upload any song and find out if it was made by a real musician or generated by AI — in seconds. Includes genre detection and a plain-English breakdown of what we found.
   </p>
   <div class="fmt-badge">
     <span class="fmt-lbl">Supported Formats</span>
@@ -796,9 +1172,13 @@ body{font-family:'DM Sans',sans-serif;background:var(--page);color:var(--txt);di
   </div>
   <div class="fair-notice">
     <span class="fair-dot"></span>
-    <span class="fair-txt"><strong>Format-fair analysis.</strong> All formats are converted to 16 kHz WAV before analysis — no codec-based bias in the results.</span>
+    <span class="fair-txt"><strong>Works with any format.</strong> We convert your file to a standard format before analysis, so the results aren't affected by how it was compressed or encoded.</span>
   </div>
   <button class="btn-start" onclick="showPage('upload')">Get Started →</button>
+  <button class="btn-start" onclick="showPage('reports');loadReports();" style="margin-top:10px;background:rgba(0,0,0,0.35);color:#fff;border:1.5px solid rgba(255,255,255,0.35);display:inline-flex;align-items:center;justify-content:center;gap:9px;">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+    View Past Reports
+  </button>
 </div>
 
 <!-- PAGE 2: UPLOAD + RESULTS -->
@@ -811,6 +1191,13 @@ body{font-family:'DM Sans',sans-serif;background:var(--page);color:var(--txt);di
         <polyline points="9 22 9 12 15 12 15 22"/>
       </svg>
       Home
+    </button>
+    <button class="btn-back" onclick="showPage('reports');loadReports();" style="left:auto;right:24px;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+        <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
+      </svg>
+      Reports
     </button>
     <div class="hero-title-row">
       <div class="hero-ico" style="width:60px;height:60px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.15);border:1.5px solid rgba(255,255,255,0.26);border-radius:16px;margin-bottom:0;">
@@ -830,7 +1217,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--page);color:var(--txt);di
     <!-- LEFT: Upload panel -->
     <div class="rp" id="rp">
       <div class="pt">Upload Audio</div>
-      <div class="ps">Any format · automatically converted to 16kHz WAV for accurate detection</div>
+      <div class="ps">Any format · we'll handle conversion automatically</div>
       <div class="uc">
         <div class="dz" id="dz">
           <input type="file" id="fi" accept=".mp3,.wav,.flac,.ogg,.m4a,.aac"/>
@@ -842,7 +1229,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--page);color:var(--txt);di
           </div>
           <div class="dz-t">Drop your audio file here</div>
           <div class="dz-s"><em id="br">Browse to upload</em></div>
-          <div class="dz-f">MP3 · WAV · FLAC · OGG · M4A · AAC → all converted to WAV</div>
+          <div class="dz-f">MP3 · WAV · FLAC · OGG · M4A · AAC · all supported</div>
         </div>
         <div class="sw" id="sw">
           <div class="sf" id="sf">
@@ -871,7 +1258,32 @@ body{font-family:'DM Sans',sans-serif;background:var(--page);color:var(--txt);di
     <!-- RIGHT: Results + Analysis panel -->
     <div id="rl-wrapper">
       <div id="results-panel">
-        <div id="rl-title">Analysis Results</div>
+        <div id="rl-title" style="padding:0;margin-bottom:16px;">
+          <!-- Static state: no track loaded -->
+          <div id="rl-title-static" style="font-family:'Syne',sans-serif;font-size:17px;font-weight:700;letter-spacing:-0.02em;">Analysis Results</div>
+
+          <!-- Dynamic state: track loaded -->
+          <div id="song-title-block" style="display:none;">
+            <div class="song-banner" id="song-banner">
+              <!-- Animated bars background -->
+              <div class="song-banner-bars" id="song-banner-bars"></div>
+
+              <!-- Left: icon + text -->
+              <div class="song-banner-left">
+                <div class="song-banner-icon" id="song-banner-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+                </div>
+                <div class="song-banner-text">
+                  <div class="song-banner-label">Track Analysis</div>
+                  <div class="song-banner-title" id="song-title-name"></div>
+                </div>
+              </div>
+
+              <!-- Right: chips -->
+              <div class="song-banner-chips" id="song-banner-chips"></div>
+            </div>
+          </div>
+        </div>
         <div id="rl-and-acoustic">
           <div id="rl">
             <div class="rl-empty" id="rl-empty">
@@ -886,8 +1298,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--page);color:var(--txt);di
           <!-- Analysis panel: only segment aggregation + score composition -->
           <div id="acoustic-panel">
             <div class="acoustic-header">
-              <span class="acoustic-header-pill">SEGMENTS</span>
-              <span class="acoustic-header-title">Segment Analysis</span>
+              <span class="acoustic-header-pill">SECTIONS</span>
+              <span class="acoustic-header-title">Song Section Analysis</span>
               <span class="acoustic-header-count" id="acoustic-count"></span>
             </div>
             <div class="analysis-pane" id="pane-model"></div>
@@ -895,6 +1307,51 @@ body{font-family:'DM Sans',sans-serif;background:var(--page);color:var(--txt);di
         </div>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- PAGE 3: REPORTS -->
+<div class="page" id="page-reports" style="flex-direction:column;background:var(--page);overflow-y:auto;">
+  <section class="hero" id="hs-reports">
+    <canvas class="wc" id="wc-reports"></canvas>
+    <button class="btn-back" onclick="showPage('upload')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+      Back
+    </button>
+    <div class="hero-title-row">
+      <div class="hero-ico" style="width:60px;height:60px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.15);border:1.5px solid rgba(255,255,255,0.26);border-radius:16px;margin-bottom:0;">
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+          <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+        </svg>
+      </div>
+      <h1>Analysis Reports</h1>
+    </div>
+  </section>
+
+  <div style="max-width:900px;margin:0 auto;width:100%;padding:28px 24px;">
+    <div id="reports-summary" style="display:none;background:#fff;border:1px solid var(--brd);border-radius:14px;padding:16px 20px;margin-bottom:20px;gap:24px;flex-wrap:wrap;align-items:center;">
+      <div style="display:flex;flex-direction:column;gap:2px;"><span style="font-family:'Plus Jakarta Sans',sans-serif;font-size:22px;font-weight:800;color:var(--txt);letter-spacing:-0.03em;" id="rpt-total">—</span><span style="font-size:11px;color:var(--mut);">Tracks analyzed</span></div>
+      <div style="display:flex;flex-direction:column;gap:2px;"><span style="font-family:'Plus Jakarta Sans',sans-serif;font-size:22px;font-weight:800;color:#16a34a;letter-spacing:-0.03em;" id="rpt-human">—</span><span style="font-size:11px;color:var(--mut);">Likely Human</span></div>
+      <div style="display:flex;flex-direction:column;gap:2px;"><span style="font-family:'Plus Jakarta Sans',sans-serif;font-size:22px;font-weight:800;color:#ef4444;letter-spacing:-0.03em;" id="rpt-ai">—</span><span style="font-size:11px;color:var(--mut);">Likely AI</span></div>
+      <div style="display:flex;flex-direction:column;gap:2px;"><span style="font-family:'Plus Jakarta Sans',sans-serif;font-size:22px;font-weight:800;color:#d97706;letter-spacing:-0.03em;" id="rpt-unsure">—</span><span style="font-size:11px;color:var(--mut);">Not Sure</span></div>
+      <div style="margin-left:auto;">
+        <button onclick="downloadAllReports()" style="display:inline-flex;align-items:center;gap:6px;background:var(--g);color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Export all (JSON)
+        </button>
+      </div>
+    </div>
+    <div id="reports-loading" style="text-align:center;padding:48px 0;color:var(--mut);font-size:14px;">
+      <div class="spin" style="width:20px;height:20px;margin:0 auto 12px;border-width:3px;"></div>
+      Loading reports…
+    </div>
+    <div id="reports-empty" style="display:none;text-align:center;padding:60px 0;">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--faint)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="margin:0 auto 12px;display:block;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      <p style="font-size:14px;color:var(--mut);margin-bottom:6px;">No reports yet</p>
+      <p style="font-size:12px;color:var(--faint);">Analyze a track to generate your first report.</p>
+    </div>
+    <div id="reports-list" style="display:flex;flex-direction:column;gap:12px;"></div>
   </div>
 </div>
 
@@ -910,14 +1367,14 @@ body{font-family:'DM Sans',sans-serif;background:var(--page);color:var(--txt);di
           </svg>
         </div>
         <div style="flex:1;min-width:0;">
-          <div class="rm-title">Report Misclassification</div>
+          <div class="rm-title">Report a Wrong Result</div>
           <div class="rm-track" id="rm-track-name">—</div>
         </div>
         <button class="rm-close" onclick="closeReport()">✕</button>
       </div>
       <div class="rm-body">
         <div class="rm-verdict-row">
-          <span class="rm-verdict-lbl">Current verdict</span>
+          <span class="rm-verdict-lbl">Our result</span>
           <span class="rm-verdict-val" id="rm-current-verdict">—</span>
         </div>
         <div class="rm-field">
@@ -979,6 +1436,7 @@ function showPage(name) {
   window.scrollTo(0, 0);
   if (name === 'landing') initWave('wc-landing', document.getElementById('page-landing'));
   if (name === 'upload')  initWave('wc-upload',  document.getElementById('hs'));
+  if (name === 'reports') initWave('wc-reports',  document.getElementById('hs-reports'));
 }
 
 // ── WAVEFORM CANVAS ────────────────────────────────────────
@@ -1037,7 +1495,7 @@ function stage(f){
   staged=f;
   const sz=f.size>1e6?(f.size/1e6).toFixed(1)+'MB':Math.round(f.size/1024)+'KB';
   document.getElementById('sn').textContent=f.name;
-  document.getElementById('sm').textContent=`${sz} · ${FMT_NAMES[ext]||ext.slice(1).toUpperCase()} → will be converted to 16kHz WAV for analysis`;
+  document.getElementById('sm').textContent=`${sz} · ${FMT_NAMES[ext]||ext.slice(1).toUpperCase()} · ready to analyze`;
   document.getElementById('sw').classList.add('vis');
   dz.style.display='none';
   document.getElementById('eb').classList.remove('on');
@@ -1067,6 +1525,11 @@ function clearAll(){
   document.getElementById('eb').classList.remove('on');
   document.getElementById('acoustic-panel').classList.remove('visible');
   document.getElementById('rl-wrapper').classList.remove('visible');
+  // Reset song title
+  const stb = document.getElementById('song-title-block');
+  const sts = document.getElementById('rl-title-static');
+  if(stb) stb.style.display = 'none';
+  if(sts) sts.style.display = 'block';
   document.getElementById('pane-model').innerHTML='';
   document.getElementById('acoustic-count').textContent='';
   const empty=document.createElement('div');
@@ -1230,7 +1693,74 @@ function prepend(r){
   acousticPanel.classList.add('visible');
   const sa=r.segment_analysis||{};
   const segs=sa.segments||[];
-  document.getElementById('acoustic-count').textContent=segs.length+' segment'+(segs.length!==1?'s':'');
+  document.getElementById('acoustic-count').textContent=segs.length+' section'+(segs.length!==1?'s':'');
+
+  // ── Update song title banner ──
+  (()=>{
+    const fname = r.display_filename || r.original_filename || r.filename || '';
+    const titleName = fname.replace(/\.[^.]+$/, '');
+    const ext = (fname.match(/\.([^.]+)$/) || ['',''])[1].toUpperCase();
+    const isHuman = (r.verdict||'').toLowerCase().includes('human');
+    const isAI    = (r.verdict||'').toLowerCase().includes('ai-generated');
+    const humanPct = Math.round(100 - (r.ai_probability||0));
+    const aiPct    = Math.round(r.ai_probability||0);
+
+    // Duration
+    const ds = r.duration_sec||0;
+    const durStr = ds>=60
+      ? Math.floor(ds/60)+':'+(String(Math.round(ds%60)).padStart(2,'0'))
+      : Math.round(ds)+'s';
+
+    // Genre
+    const genre = r.genre?.top?.label || '';
+
+    // Banner accent color
+    const accentCol = isHuman ? '#10b981' : isAI ? '#ef4444' : '#f59e0b';
+    const accentDim = isHuman ? 'rgba(16,185,129,0.15)' : isAI ? 'rgba(239,68,68,0.12)' : 'rgba(245,158,11,0.12)';
+    const accentText = isHuman ? '#065f46' : isAI ? '#7f1d1d' : '#78350f';
+    const verdictLabel = isHuman ? 'Human' : isAI ? 'AI-Generated' : 'Uncertain';
+    const verdictEmoji = isHuman ? '🟢' : isAI ? '🔴' : '🟡';
+
+    // Build chips
+    const chips = [];
+    chips.push({label: verdictEmoji+' '+verdictLabel, bg: accentDim, color: accentText, border: accentCol+'44'});
+    chips.push({label: isHuman ? humanPct+'% Human' : aiPct+'% AI', bg: 'rgba(15,23,42,0.06)', color:'#334155', border:'#e2e8f0'});
+    if(ext) chips.push({label: ext, bg:'rgba(15,23,42,0.05)', color:'#64748b', border:'#e2e8f0'});
+    if(durStr) chips.push({label: '⏱ '+durStr, bg:'rgba(15,23,42,0.05)', color:'#64748b', border:'#e2e8f0'});
+    if(genre) chips.push({label: '🎵 '+genre, bg:'rgba(15,23,42,0.05)', color:'#64748b', border:'#e2e8f0'});
+
+    const banner   = document.getElementById('song-banner');
+    const nameEl   = document.getElementById('song-title-name');
+    const chipsEl  = document.getElementById('song-banner-chips');
+    const iconEl   = document.getElementById('song-banner-icon');
+    const barsEl   = document.getElementById('song-banner-bars');
+    const block    = document.getElementById('song-title-block');
+    const staticEl = document.getElementById('rl-title-static');
+
+    if(!banner) return;
+
+    // Set accent
+    banner.style.setProperty('--banner-accent', accentCol);
+    banner.style.borderLeftColor = accentCol;
+    if(iconEl) iconEl.style.background = 'linear-gradient(135deg,'+accentCol+','+accentCol+'cc)';
+
+    // Title
+    if(nameEl) nameEl.textContent = titleName || fname;
+
+    // Chips
+    if(chipsEl){
+      chipsEl.innerHTML = chips.map(c=>
+        '<span style="display:inline-flex;align-items:center;padding:4px 10px;border-radius:99px;font-size:10.5px;font-weight:600;font-family:\'DM Sans\',sans-serif;background:'+c.bg+';color:'+c.color+';border:1px solid '+c.border+';white-space:nowrap;letter-spacing:0em;">'+esc(c.label)+'</span>'
+      ).join('');
+    }
+
+    // Bars section removed — clean professional look
+    if(barsEl){ barsEl.innerHTML = ''; }
+
+    if(block)  block.style.display  = 'block';
+    if(staticEl) staticEl.style.display = 'none';
+  })();
+
   buildModelPane(r);
 }
 
@@ -1238,119 +1768,151 @@ function prepend(r){
 function buildModelPane(r){
   const p=document.getElementById('pane-model');
   p.innerHTML='';
-
   const sa=r.segment_analysis||{};
   const segs=sa.segments||[];
-  const neuralW=Math.round((sa.neural_weight||0.85)*100);
-  const acousticW=Math.round((sa.acoustic_weight||0.15)*100);
-  const neuralRaw=sa.weighted_neural!=null?Math.round(sa.weighted_neural*100):null;
-  const acousticRaw=sa.weighted_acoustic!=null?Math.round(sa.weighted_acoustic*100):null;
-  const finalProb=r.ai_probability!=null?r.ai_probability.toFixed(1):null;
+  const finalProb=r.ai_probability!=null?parseFloat(r.ai_probability):50;
+  const totalEW=segs.reduce((a,s)=>a+(s.effective_weight||s.weight||1),0);
 
-  const wrap=document.createElement('div');wrap.className='mp-wrap';
+  const humanSignals={
+    intro:['Natural fade-in dynamics','Organic timing variations','Human-like intro energy'],
+    verse:['Natural vocal timing drift','Emotional loudness variation','Human phrasing inconsistencies','Organic transitions'],
+    chorus:['Strong dynamic lift','Natural chorus energy surge','Human-made intensity peak'],
+    pre:['Build-up energy variation','Natural tension increase','Human transition patterns'],
+    bridge:['Unexpected rhythmic variation','Creative structural deviation'],
+    outro:['Natural fade-out dynamics','Human-like energy decay','Organic ending']
+  };
+  const aiSignals={
+    intro:['Perfectly timed intro pattern','Robotic timing consistency','Machine-precision start'],
+    verse:['Repetitive rhythm grid','Over-clean transitions','Flat energy curve','Robotic timing consistency'],
+    chorus:['Mechanically uniform chorus','Algorithmic energy peak','Perfect pitch repetition'],
+    pre:['Algorithm-precise build','Templated transition','Machine-generated ramp'],
+    bridge:['Structural template repeat','AI bridge pattern'],
+    outro:['Algorithmic fade pattern','Machine-precise ending','Template outro structure']
+  };
 
-  wrap.innerHTML=`
-    <div>
-      <div class="mp-section-title">Multi-Segment Aggregation</div>
-      <div class="mp-flow">
-        <div class="mp-step">
-          <div class="mp-step-icon si-seg">🎚️</div>
-          <div class="mp-step-body">
-            <div class="mp-step-name">
-              Segment Breakdown
-              <span class="mp-step-tag" style="background:rgba(168,85,247,0.1);color:#6b21a8;">Segments</span>
-            </div>
-            <div class="mp-step-desc">
-              The full track is split into intro, chorus, and ending segments. Each is run through
-              the full CNN → AST → Classifier pipeline independently. Segments are weighted by
-              position importance (for example, chorus contributes more than outro).
-            </div>
-            <div class="mp-note" style="margin-top:8px;">
-              This table shows per-segment AI scores. The final card score is a weighted blend
-              across all segments plus acoustic calibration, so it will not always match any single row.
-            </div>
-            ${segs.length?`
-            <div style="margin-top:10px;overflow-x:auto;">
-              <table class="mp-seg-table">
-                <thead><tr>
-                  <th>Segment</th><th>Neural AI%</th><th>Acoustic AI%</th><th>Weight</th>
-                </tr></thead>
-                <tbody>
-                  ${segs.map(s=>{
-                    const nAiPct=Math.round((s.neural_prob||0)*100);
-                    const aAiPct=Math.round((s.acoustic_prob||0)*100);
-                    const nPct=nAiPct;
-                    const aPct=aAiPct;
-                    const nBarColor=nPct>55?'#ef4444':nPct<45?'#16a34a':'#d97706';
-                    const nBar=`<div class="mp-seg-bar"><div class="mp-seg-fill" style="background:${nBarColor};width:${nPct}%"></div></div>`;
-                    return`<tr>
-                      <td><strong>${esc(s.name)}</strong></td>
-                      <td>${nBar}<span style="font-family:var(--mono);font-size:9px;">${nPct}%</span></td>
-                      <td><span style="font-family:var(--mono);font-size:9px;">${aPct}%</span></td>
-                      <td><span style="font-family:var(--mono);font-size:9px;">${((s.weight||1)*100).toFixed(0)}%</span></td>
-                    </tr>`;
-                  }).join('')}
-                </tbody>
-              </table>
-            </div>`:''}
-          </div>
-        </div>
-      </div>
-    </div>
+  function getSignalKey(name){
+    const nl=name.toLowerCase();
+    if(nl.includes('intro'))return'intro';
+    if(nl.includes('chorus'))return'chorus';
+    if(nl.includes('pre'))return'pre';
+    if(nl.includes('bridge'))return'bridge';
+    if(nl.includes('outro'))return'outro';
+    return'verse';
+  }
+  function segEmoji(n){
+    const nl=n.toLowerCase();
+    if(nl.includes('intro'))return'🎬';if(nl.includes('chorus'))return'🎶';
+    if(nl.includes('verse'))return'🎤';if(nl.includes('pre'))return'⬆️';
+    if(nl.includes('outro'))return'🏁';if(nl.includes('bridge'))return'🌉';return'🎵';
+  }
 
-    <div>
-      <div class="mp-section-title">Score Composition</div>
-      <div style="display:flex;flex-direction:column;gap:9px;">
-        <div class="mp-weight-row">
-          <div class="mp-weight-label">
-            <span class="mp-weight-name">🧠 Neural network (CNN + AST)</span>
-            <span class="mp-weight-pct">${neuralW}% weight${neuralRaw!=null?' · '+neuralRaw+'% AI':''}</span>
-          </div>
-          <div class="mp-weight-track"><div class="mp-weight-fill wf-neural" data-w="${neuralW}"></div></div>
-        </div>
-        <div class="mp-weight-row">
-          <div class="mp-weight-label">
-            <span class="mp-weight-name">📊 Acoustic feature analysis</span>
-            <span class="mp-weight-pct">${acousticW}% weight${acousticRaw!=null?' · '+acousticRaw+'% AI':''}</span>
-          </div>
-          <div class="mp-weight-track"><div class="mp-weight-fill wf-acoustic" data-w="${acousticW}"></div></div>
-        </div>
-        ${finalProb!=null?`<div class="mp-note">
-          The neural network output (${neuralRaw??'—'}% AI) carries ${neuralW}% of the final score.
-          Acoustic features (${acousticRaw??'—'}% AI) supply the remaining ${acousticW}% as a
-          corroborating signal. Small adjustments (±8% max) are applied for strong human or AI
-          acoustic indicators before arriving at the final <strong>${finalProb}% AI probability</strong>.
-        </div>`:''}
-      </div>
-    </div>`;
+  if(segs.length>0){
+    const sectionOrder=['intro','verse 1','verse 2','verse','pre-chorus','pre chorus','chorus','bridge','outro'];
+    const sortedSegs=[...segs].sort((a,b)=>{
+      const ai=sectionOrder.findIndex(x=>a.name.toLowerCase().includes(x.split(' ')[0]));
+      const bi=sectionOrder.findIndex(x=>b.name.toLowerCase().includes(x.split(' ')[0]));
+      return(ai===-1?99:ai)-(bi===-1?99:bi);
+    });
+    const rawTotalH=segs.reduce((a,s)=>{const ew=s.effective_weight||s.weight||1;return a+(ew/totalEW)*(1-(s.neural_prob||0))*100;},0);
+    const rawTotalA=segs.reduce((a,s)=>{const ew=s.effective_weight||s.weight||1;return a+(ew/totalEW)*(s.neural_prob||0)*100;},0);
+    const actualH=100-finalProb,actualA=finalProb;
+    const scaleH=rawTotalH>0?actualH/rawTotalH:1;
+    const scaleA=rawTotalA>0?actualA/rawTotalA:1;
 
-  p.appendChild(wrap);
+    const wrap=document.createElement('div');
+    wrap.style.cssText='padding:16px 16px 20px;display:flex;flex-direction:column;gap:10px;';
+    const titleRow=document.createElement('div');
+    titleRow.className='section-timeline-header';
+    titleRow.innerHTML='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--emerald)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>'
+      +'<span class="section-timeline-title">Song Section Analysis</span>'
+      +'<span class="section-timeline-count">'+segs.length+' section'+(segs.length!==1?'s':'')+'</span>';
+    wrap.appendChild(titleRow);
 
-  // ── Render heatmap below segment analysis if available ──
+    sortedSegs.forEach(s=>{
+      const nPct=Math.round((s.neural_prob||0)*100);
+      const ew=s.effective_weight||s.weight||1;
+      const wPct=Math.round(ew*100);
+      const sectionShare=totalEW>0?ew/totalEW:0;
+      const contribH=(sectionShare*(1-(s.neural_prob||0))*100*scaleH).toFixed(1);
+      const contribA=(sectionShare*(s.neural_prob||0)*100*scaleA).toFixed(1);
+      const isHumanSec=nPct<45,isAISec=nPct>=55;
+      const secClass=isHumanSec?'is-human-sec':isAISec?'is-ai-sec':'is-mixed-sec';
+      const barClass=isHumanSec?'human-fill':isAISec?'ai-fill':'mixed-fill';
+      const vbClass=isHumanSec?'svb-human':isAISec?'svb-ai':'svb-mixed';
+      const vbLabel=isHumanSec?'Human Traits':isAISec?'AI Traits Detected':'Mixed Signals';
+      const impactLabel=wPct>=140?'⭐ High Impact':wPct>=90?'⚡ Medium Impact':'• Low Impact';
+      const impactClass=wPct>=140?'impact-high':wPct>=90?'impact-med':'impact-low';
+      const contribDisplay=isHumanSec?'+'+contribH+'% Human':isAISec?'+'+contribA+'% AI':'H:'+contribH+'% / AI:'+contribA+'%';
+      const contribColor=isHumanSec?'var(--emerald)':isAISec?'var(--crimson)':'var(--amber)';
+      const key=getSignalKey(s.name);
+      const sigs=isHumanSec?humanSignals[key]:aiSignals[key];
+      const sigHtml=(sigs||[]).map(sig=>'<div class="sec-signal-item '+(isHumanSec?'sig-human':'sig-ai')+'"><div class="sec-signal-dot"></div><span>'+esc(sig)+'</span></div>').join('');
+
+      const card=document.createElement('div');
+      card.className='sec-card '+secClass;
+      card.innerHTML=
+        '<div class="sec-card-main">'
+        +'<div class="sec-card-emoji">'+segEmoji(s.name)+'</div>'
+        +'<div class="sec-card-info">'
+        +'<div class="sec-card-name">'+esc(s.name)+'<span class="sec-impact-badge '+impactClass+'">'+impactLabel+'</span></div>'
+        +'<div class="sec-bar-row">'
+        +'<div class="sec-bar-track"><div class="sec-bar-fill '+barClass+'" data-w="'+nPct+'"></div></div>'
+        +'<span class="sec-confidence-pct">'+nPct+'% AI signal</span>'
+        +'</div>'
+        +'</div>'
+        +'<div class="sec-card-right">'
+        +'<span class="sec-verdict-badge '+vbClass+'">'+vbLabel+'</span>'
+        +'<span class="sec-contrib" style="color:'+contribColor+'">'+contribDisplay+'</span>'
+        +'</div>'
+        +'</div>'
+        +'<div class="sec-details">'
+        +'<div class="sec-details-title">'+(isHumanSec?'Human Traits Detected':isAISec?'AI Traits Detected':'Detected Signals')+'</div>'
+        +'<div class="sec-signals-grid">'+sigHtml+'</div>'
+        +'</div>'
+        +'<div class="sec-expand-hint"><span>Click to see detected signals</span>'
+        +'<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>';
+      card.addEventListener('click',()=>{
+        card.classList.toggle('expanded');
+        const hint=card.querySelector('.sec-expand-hint span');
+        if(hint)hint.textContent=card.classList.contains('expanded')?'Collapse signals':'Click to see detected signals';
+        card.querySelectorAll('.sec-bar-fill').forEach(el=>{const w=parseFloat(el.getAttribute('data-w')||0);el.style.width=w+'%';});
+      });
+      wrap.appendChild(card);
+    });
+
+    // Final score strip
+    const hp=parseFloat((100-finalProb).toFixed(1)),ap=parseFloat(finalProb.toFixed(1));
+    const strip=document.createElement('div');
+    strip.style.cssText='border-radius:10px;overflow:hidden;border:1px solid var(--brd);margin-top:4px;';
+    strip.innerHTML='<div style="display:flex;height:26px;">'
+      +'<div style="flex:'+hp+';background:var(--emerald);display:flex;align-items:center;justify-content:center;"><span style="font-size:11px;font-weight:800;color:#fff;">'+hp+'% Human</span></div>'
+      +'<div style="flex:'+ap+';background:var(--crimson);display:flex;align-items:center;justify-content:center;"><span style="font-size:11px;font-weight:800;color:#fff;">'+ap.toFixed(1)+'% AI</span></div>'
+      +'</div>'
+      +'<div style="padding:8px 14px;background:var(--slate-50);border-top:1px solid var(--brd);font-size:10px;color:var(--mut);">Each section’s contribution is weighted by its structural importance.</div>';
+    wrap.appendChild(strip);
+    p.appendChild(wrap);
+  }
+
   if(r.xai_deep){
     const gc=r.xai_deep.gradcam;
     if(gc&&!gc.error&&gc.heatmap&&gc.heatmap.length){
-      const heatmapWrap=document.createElement('div');
-      heatmapWrap.style.cssText='margin-top:4px;';
-      p.appendChild(heatmapWrap);
-      renderGradCAM(heatmapWrap,r.xai_deep);
+      const hw=document.createElement('div');hw.style.cssText='margin-top:4px;';
+      p.appendChild(hw);renderGradCAM(hw,r.xai_deep);
     }
   }
-
-  // ── Instrument analysis after CNN heat map ──
-  p.insertAdjacentHTML(
-    'beforeend',
-    r.instrument_analysis
-      ? instrumentHtml(r.instrument_analysis)
-      : `<div class="instr-card"><div class="instr-header"><span class="instr-pill">Instruments</span><span style="font-size:11px;color:var(--faint)">No instrument analysis available</span></div></div>`
+  p.insertAdjacentHTML('beforeend',
+    r.instrument_analysis?instrumentHtml(r.instrument_analysis)
+    :'<div class="instr-card"><div class="instr-header"><span class="instr-pill">Instruments</span><span style="font-size:11px;color:var(--faint)">No instrument analysis available</span></div></div>'
   );
-
   setTimeout(()=>{
-    p.querySelectorAll('.mp-weight-fill[data-w]').forEach(el=>{
-      el.style.width=el.dataset.w+'%';
+    p.querySelectorAll('.sec-bar-fill').forEach(el=>{
+      const w=parseFloat(el.getAttribute('data-w')||0);
+      el.style.transition='width 1s cubic-bezier(0.22,1,0.36,1)';el.style.width=w+'%';
     });
-  },300);
+  },80);
 }
+
+
 
 // ── HELPERS ───────────────────────────────────────────────
 function pc(p,verdict){
@@ -1385,10 +1947,10 @@ function verdictChip(verdict){
 }
 function summaryText(verdict){
   const v=(verdict||'').toLowerCase();
-  if(v.includes('ai-generated'))return'AI-like audio characteristics detected';
-  if(v==='not sure'||v.includes('not sure'))return'Signal is ambiguous — result is uncertain';
-  if(v.includes('human'))return'Mostly human audio characteristics';
-  return'Mixed characteristics — result is uncertain';
+  if(v.includes('ai-generated'))return'Sounds like AI-generated music';
+  if(v==='not sure'||v.includes('not sure'))return'We\'re not sure — the result is mixed';
+  if(v.includes('human'))return'Sounds like human-made music';
+  return'Mixed signals — result is uncertain';
 }
 function gauge(pct,verdict){
   const r=34,cx=44,cy=44,sw=7,sweep=Math.PI*1.5,arcLen=sweep*r;
@@ -1412,27 +1974,27 @@ function blendBar(sb,diagnostics){
   const hasPenalty=codecDetected;
   const finalTotal=Math.round(totalBase);
   return`<div class="blend-row">
-    <div class="blend-lbl">Score composition</div>
+    <div class="blend-lbl">How the score is made up</div>
     <div class="blend-bar-wrap">
       <div class="blend-seg-n" style="width:${np}%;"></div>
       <div class="blend-seg-a" style="width:${ap}%;"></div>
     </div>
     <div class="blend-meta">
       <div class="blend-col">
-        <div class="blend-key"><span class="blend-dot" style="background:#17a870;"></span>Neural model</div>
-        <div class="blend-weight">Weight: ${np}% — spectrogram pattern analysis</div>
+        <div class="blend-key"><span class="blend-dot" style="background:#17a870;"></span>Neural network</div>
+        <div class="blend-weight">Weight: ${np}% — looks for AI patterns in sound</div>
         <div class="blend-pts" style="color:#17a870;">+${nc.toFixed(1)} pts this track</div>
       </div>
       <div class="blend-col blend-col-right">
-        <div class="blend-key" style="justify-content:flex-end;"><span class="blend-dot" style="background:#a8b4ae;"></span>Acoustic features</div>
-        <div class="blend-weight">Weight: ${ap}% — signal characteristic analysis</div>
+        <div class="blend-key" style="justify-content:flex-end;"><span class="blend-dot" style="background:#a8b4ae;"></span>Accoustic features</div>
+        <div class="blend-weight">Weight: ${ap}% — checks rhythm, pitch, and texture</div>
         <div class="blend-pts" style="color:var(--mut);">+${ac.toFixed(1)} pts this track</div>
       </div>
     </div>
     ${hasPenalty?`<div style="margin-top:6px;padding-top:4px;border-top:1px solid #e3ebe7;font-size:8px;color:var(--faint);font-family:var(--mono);">
       <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px;">
         <span>Base: ${totalBase.toFixed(1)}%</span>
-        <span>Codec penalty applied (lossy compression detected)</span>
+        <span>Compressed audio detected — score slightly adjusted</span>
         <span><strong>→ Final: ${finalTotal}%</strong></span>
       </div></div>`:''}
   </div>`;
@@ -1464,7 +2026,7 @@ function genreHtml(genre){
     const subTagsHtml=subs.length?`<div class="genre-subgenres">${subs.map(s=>`<span class="genre-sub-tag${s.label===topSubLabel?' top-sub':''}">${esc(s.label)}</span>`).join('')}</div>`:'';
     return`<div><div class="genre-row${isTop?' top':''}"><span class="genre-row-label" title="${esc(g.label)}">${esc(g.label)}</span><div class="genre-row-bar-wrap"><div class="genre-row-bar" data-w="${barW}"></div></div><span class="genre-row-pct">${pct}%</span></div>${subTagsHtml}</div>`;
   }).join('');
-  return`<div class="genre-card"><div class="genre-header"><span class="genre-pill">Genre</span><div class="genre-title-row"><span class="genre-main-name">${esc(top.label)}</span><span class="genre-top-chip"><span class="genre-top-pct">${Math.round(top.score)}%</span> match</span>${subChipHtml}<span class="genre-conf-note">${esc(confNote)}</span></div></div><div class="genre-bars">${barsHtml}</div><div class="genre-meta"><div class="genre-meta-item"><strong>Stability:</strong><span style="display:inline-flex;align-items:center;gap:4px;"><span class="stability-pips">${pipsHtml}</span>${stability}%</span></div>${windows?`<div class="genre-meta-item"><strong>Windows:</strong> ${windows} analysed</div>`:''}<div class="genre-meta-item"><strong>Sources:</strong> ${esc(sources)}</div></div></div>`;
+  return`<div class="genre-card"><div class="genre-header"><span class="genre-pill">Genre</span><div class="genre-title-row"><span class="genre-main-name">${esc(top.label)}</span><span class="genre-top-chip"><span class="genre-top-pct">${Math.round(top.score)}%</span> match</span>${subChipHtml}<span class="genre-conf-note">${esc(confNote)}</span></div></div><div class="genre-bars">${barsHtml}</div><div class="genre-meta"><div class="genre-meta-item"><strong>Consistency:</strong><span style="display:inline-flex;align-items:center;gap:4px;"><span class="stability-pips">${pipsHtml}</span>${stability}%</span></div>${windows?`<div class="genre-meta-item"><strong>Sections checked:</strong> ${windows}</div>`:''}<div class="genre-meta-item"><strong>Detection models:</strong> ${esc(sources)}</div></div></div>`;
 }
 
 function instrumentHtml(ia){
@@ -1472,7 +2034,7 @@ function instrumentHtml(ia){
   const instruments=ia.instruments||[];
   const sv=ia.summary_verdict||'';
   const svClass=sv.toLowerCase().includes('ai')?'ai':sv.toLowerCase().includes('real')?'real':'mixed';
-  const sourceLabel=ia.source==='acoustic_analysis'?'Acoustic Analysis':'Neural Tagger';
+  const sourceLabel=ia.source==='acoustic_analysis'?'Sound Analysis':'AI Tag Detection';
   const sourceBadge=`<span style="font-family:var(--mono);font-size:8px;color:var(--faint);margin-left:auto;letter-spacing:0.04em">${sourceLabel}</span>`;
 
   if(!ia.available||!instruments.length){
@@ -1485,14 +2047,14 @@ function instrumentHtml(ia){
     const scoreVal=inst.verdict==='Real / Performed'?inst.real_score:inst.ai_score;
     const aiCol=vClass==='ai'?'#dc2626':vClass==='real'?'#16a34a':'#d97706';
     const realCol='#16a34a';
-    const rel=inst.reliability_score!=null?` · reliability ${inst.reliability_score}%`:'';
+    const rel=inst.reliability_score!=null?` · confidence ${inst.reliability_score}%`:'';
     const signals=(inst.signals||[]).map(s=>`<div class="instr-signal">· ${esc(s)}</div>`).join('');
     const confHtml=`<span class="instr-conf">${esc(inst.confidence||'')} confidence</span>`;
-    const elecNote=inst.is_electronic?`<div class="instr-elec-note">Electronic/synthetic by nature — AI score adjusted</div>`:'';
+    const elecNote=inst.is_electronic?`<div class="instr-elec-note">This is a naturally electronic/synthetic instrument — AI score adjusted accordingly</div>`:'';
     return`<div class="instr-row">
       <div class="instr-row-top">
         <span class="instr-name">${esc(inst.name)}</span>
-        <span class="instr-tag-score">detected ${inst.tag_score}%${rel}</span>
+        <span class="instr-tag-score">recognition ${inst.tag_score}%${rel}</span>
         <span class="instr-verdict-chip ${vClass}">${esc(inst.verdict)}</span>
       </div>
       <div class="instr-bar-wrap" style="height:6px;display:flex;gap:2px;background:transparent;">
@@ -1511,13 +2073,13 @@ function instrumentHtml(ia){
     ia.ai_count>0?`<div class="instr-footer-stat"><strong>${ia.ai_count}</strong> AI-generated</div>`:'',
     ia.real_count>0?`<div class="instr-footer-stat"><strong>${ia.real_count}</strong> real/performed</div>`:'',
     ia.uncertain_count>0?`<div class="instr-footer-stat"><strong>${ia.uncertain_count}</strong> uncertain</div>`:'',
-    ia.avg_reliability!=null?`<div class="instr-footer-stat"><strong>${ia.avg_reliability}%</strong> avg reliability</div>`:'',
+    ia.avg_reliability!=null?`<div class="instr-footer-stat"><strong>${ia.avg_reliability}%</strong> avg confidence</div>`:'',
   ].filter(Boolean).join('');
 
   return`<div class="instr-card">
     <div class="instr-header">
       <span class="instr-pill">Instruments</span>
-      <span class="instr-title">Instrument Analysis</span>
+      <span class="instr-title">Detected Instruments</span>
       ${sv?`<span class="instr-summary-chip ${svClass}">${esc(sv)}</span>`:''}
       ${sourceBadge}
     </div>
@@ -1529,144 +2091,227 @@ function instrumentHtml(ia){
 function buildCard(r){
   const card=document.createElement('div');card.className='vc';
   if(r.error){
-    card.innerHTML=`<div class="vc-stripe" style="background:#ef4444"></div>
-      <div class="vc-topbar"><span class="vc-fname">${esc(r.filename)}</span>
-      <span class="vchip ch-ai">Error</span></div>
-      <div style="padding:12px 16px;font-size:12.5px;color:var(--red)">${esc(r.error)}</div>`;
+    card.innerHTML='<div style="background:#fff;border-radius:14px;border:1px solid #fca5a5;padding:16px;color:#ef4444;font-size:13px;">Error: '+esc(r.error||'Unknown error')+'</div>';
     return card;
   }
-  const pct=Math.round((r.ai_probability??0)*10)/10,verdict=r.verdict||'Not Sure';
-  const vc=verdictChip(verdict);
-  const originalFmt=r.original_format||'',analyzedFmt=r.analyzed_format||'WAV (16kHz)';
-  const conversionNote=r.conversion_note||'';
-  const displayFilename=r.display_filename||r.analyzed_file||r.filename;
+  const pct=Math.round((r.ai_probability??0)*10)/10;
+  const verdict=r.verdict||'Not Sure';
+  const displayFilename=r.display_filename||r.original_filename||r.filename||'Unknown';
   const nlText=r.nl_explanation||'';
-
+  const humanPct=Math.round((100-pct)*10)/10;
+  const isHuman=verdict.toLowerCase().includes('human');
+  const isAI=verdict.toLowerCase().includes('ai-generated');
+  const heroClass=isHuman?'is-human':isAI?'is-ai':'is-unsure';
+  const heroIcon=isHuman?'🎵':isAI?'🤖':'🤔';
+  const displayScore=isHuman?humanPct:pct;
+  const scoreLabel=isHuman?'Human Score':'AI Score';
+  const scoreColor=isHuman?'#34d399':isAI?'#fca5a5':'#fcd34d';
+  const segs=r.segment_analysis?.segments||[];
+  const confidenceScore=segs.length>0?(()=>{
+    const avgConf=segs.reduce((a,s)=>a+(s.confidence||0),0)/segs.length;
+    if(avgConf>0.75)return'High';if(avgConf>0.50)return'Moderate';return'Low';
+  })():'Moderate';
+  const confClass=confidenceScore==='High'?'conf-high':confidenceScore==='Moderate'?'conf-med':'conf-low';
   card._reportData={
     filename:r.original_filename||r.filename||displayFilename,
     original_verdict:verdict,ai_probability:pct,
     genre:r.genre?.top?.label||null,
     codec_detected:r.score_breakdown?.codec_compression?.detected||false,
   };
+  card._fullExpl=nlText;
   const _cardId='card-'+Math.random().toString(36).slice(2);
-  card._cardId=_cardId;
-  r._cardId=_cardId;
+  card._cardId=_cardId;r._cardId=_cardId;
+  const trustBadges=[];
+  if(segs.length>1)trustBadges.push('🧠 Multi-Section Analysis Complete');
+  const hasConflict=segs.some(s=>Math.abs((s.neural_prob||0)-(s.acoustic_prob||0))>0.3);
+  if(hasConflict)trustBadges.push('⚠ Mixed Sections Detected');
+  else trustBadges.push('✔ Reliable Result');
+  const trustHtml=trustBadges.map(t=>'<span class="trust-badge">'+t+'</span>').join('');
+  const shortExpl=nlText?(nlText.length>180?nlText.slice(0,177)+'…':nlText)
+    :(isHuman?'Natural timing, dynamic variation, and organic patterns were detected across multiple song sections.'
+      :isAI?'Repetitive rhythm grids, over-clean transitions, and flat energy curves were identified.'
+      :'The analysis returned mixed signals — some sections lean human, others lean AI.');
+  card.innerHTML=
+    '<div class="verdict-hero '+heroClass+'">'
+    +'<div class="verdict-hero-bg">'
+    +'<div class="verdict-hero-top">'
+    +'<div class="verdict-icon-wrap">'+heroIcon+'</div>'
+    +'<div class="verdict-headline">'
+    +'<div class="verdict-label">Analysis Result</div>'
+    +'<div class="verdict-title">'+(isHuman?'Likely Human-Created':isAI?'Likely AI-Generated':'Uncertain — Mixed Signals')+'</div>'
+    +'<div class="verdict-trust-row">'+trustHtml+'</div>'
+    +'</div>'
 
-  card.innerHTML=`
-    <div class="vc-stripe" style="background:${pc(pct,verdict)}"></div>
-    <div class="vc-fname-row">
-      <span class="vc-fname-full">🎵 ${esc(displayFilename)}</span>
-    </div>
-    <div class="vc-topbar">
-      ${originalFmt?`<span class="fmt-tag">📁 ${esc(originalFmt)}</span>`:''}
-      <span class="conversion-badge">🔄 ${esc(analyzedFmt)}</span>
-      <span class="vchip ${vc.cls}"><span class="vchip-dot" style="background:${vc.dot}"></span>${esc(verdict)}</span>
-      <button class="btn-report" onclick="openReport(this)" title="Report misclassification">
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-          <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-        </svg>
-        Report
-      </button>
-    </div>
-    ${conversionNote?`<div class="conversion-note"><span>🔄 ${esc(conversionNote)}</span></div>`:''}
-    <div class="vc-score">
-      <div class="gw">${gauge(pct,verdict)}</div>
-      <div class="sr">
-        <div class="sr-title">${esc(summaryText(verdict))}</div>
-        <div class="sr-score-row">
-          <span class="sr-big-pct" style="color:${pc(pct,verdict)}">${displayPct(pct,verdict)}%</span>
-          <span class="sr-big-lbl" style="color:${pc(pct,verdict)}">${similarityLabel(verdict)}</span>
-        </div>
-        <div class="sr-badges">
-          ${verdict.toLowerCase().includes('human')?
-            `<span class="sr-badge" style="background:rgba(22,163,74,0.12);color:#15803d;border:1px solid rgba(22,163,74,0.25);"><span class="sr-badge-dot" style="background:#16a34a"></span>Human-like</span>`:
-            verdict.toLowerCase().includes('ai')?
-            `<span class="sr-badge" style="background:rgba(239,68,68,0.1);color:#b91c1c;"><span class="sr-badge-dot" style="background:#ef4444"></span>AI-generated</span>`:
-            `<span class="sr-badge" style="background:rgba(245,158,11,0.1);color:#92400e;"><span class="sr-badge-dot" style="background:#f59e0b"></span>Uncertain</span>`
-          }
-          <span class="sr-badge" style="background:#f0f3f1;color:var(--mut);">AI prob: ${pct}%</span>
-        </div>
-      </div>
-    </div>
-    <div class="div"></div>
-    ${nlText?`<div class="nl-block">
-      <div class="nl-header">
-        <div class="nl-icon">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--g)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-          </svg>
-        </div>
-        <span class="nl-label">Why this verdict?</span>
-      </div>
-      <div class="nl-text">${esc(nlText)}</div>
-    </div>`:''}
-    <div class="ap-wrap" id="ap-PLACEHOLDER">
-      <div class="ap-inner">
-        <div class="ap-header">
-          <div class="ap-icon">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--g)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-              <polygon points="5 3 19 12 5 21 5 3"/>
-            </svg>
-          </div>
-          <span class="ap-label">Listen</span>
-          <span class="ap-fname">${esc(displayFilename)}</span>
-        </div>
-        <div class="ap-viz-wrap" title="Click to seek">
-          <canvas class="ap-viz-canvas"></canvas>
-          <div class="ap-progress-line" style="left:0%"></div>
-        </div>
-        <div class="ap-controls">
-          <button class="ap-btn ap-play-btn" title="Play/Pause">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="white" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-          </button>
-          <span class="ap-time">0:00 / 0:00</span>
-          <div class="ap-vol-wrap">
-            <svg class="ap-vol-ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
-            <input class="ap-vol" type="range" min="0" max="1" step="0.02" value="1" title="Volume">
-          </div>
-        </div>
-        <div class="ap-timeline" title="Signal regions — click to seek">
-          <div class="ap-tl-played" style="width:0%"></div>
-          <div class="ap-tl-cursor" style="left:0%"></div>
-        </div>
-        <div class="ap-tl-legend">
-          <div class="ap-tl-legend-item"><div class="ap-tl-legend-dot" style="background:#ef4444"></div>AI-like region</div>
-          <div class="ap-tl-legend-item"><div class="ap-tl-legend-dot" style="background:#16a34a"></div>Human-like region</div>
-          <div class="ap-tl-legend-item"><div class="ap-tl-legend-dot" style="background:#f59e0b"></div>Uncertain region</div>
-        </div>
-      </div>
-    </div>
-    <div class="vc-body">
-      ${r.genre?genreHtml(r.genre):''}
-      ${r.score_breakdown?blendBar(r.score_breakdown,r.diagnostics):''}
-      <div class="div"></div>
-      ${fileInfo(r)}
-      <div class="vc-foot">
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-          <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/>
-          <line x1="12" y1="16" x2="12.01" y2="16"/>
-        </svg>
-        All formats converted to 16kHz WAV for fair, accurate detection.
-      </div>
-    </div>`;
-  // Fix player wrap id
+    +'</div>'
+    +'<div class="verdict-gauge-row">'
+    +'<div class="verdict-gauge-item">'
+    +'<div class="verdict-gauge-label">'+scoreLabel+'</div>'
+    +'<div class="verdict-gauge-value" style="color:'+scoreColor+'">'+displayScore+'%</div>'
+    +'<div class="verdict-gauge-sub">'+(isHuman?'Human Signals Detected':isAI?'AI Signals Detected':'Mixed signals')+'</div>'
+    +'<div class="verdict-gauge-bar"><div class="verdict-gauge-fill" data-w="'+displayScore+'" style="width:0%"></div></div>'
+    +'</div>'
+    +'<div class="verdict-gauge-divider"></div>'
+    +'<div class="verdict-gauge-item">'
+    +'<div class="verdict-gauge-label">Confidence</div>'
+    +'<div class="verdict-gauge-value">'+confidenceScore+'</div>'
+    +'<div class="verdict-gauge-sub">'+segs.length+' section'+(segs.length!==1?'s':'')+' analyzed</div>'
+    +'</div>'
+    +'</div>'
+    +'<div style="background:rgba(0,0,0,0.15);border-radius:10px;padding:10px 14px;margin-top:0;">'
+    +'<div class="verdict-gauge-label" style="margin-bottom:4px;">File</div>'
+    +'<div style="font-family:\'DM Sans\',sans-serif;font-size:12.5px;font-weight:600;color:rgba(255,255,255,0.9);word-break:break-word;line-height:1.5;">'+esc(displayFilename)+'</div>'
+    +(r.original_format?'<div style="font-family:var(--mono);font-size:9px;color:rgba(255,255,255,0.45);margin-top:4px;text-transform:uppercase;letter-spacing:0.05em;">'+esc(r.original_format)+' → WAV 16kHz</div>':'')
+    +'</div>'
+    +(nlText?'<div class="verdict-explanation" id="ve-'+_cardId+'" onclick="toggleVE(\''+_cardId+'\')" style="cursor:pointer;user-select:none;">'
+      +'<div class="verdict-explanation-icon">💡</div>'
+      +'<div class="verdict-explanation-text" id="ve-text-'+_cardId+'" style="flex:1;">'+esc(shortExpl)+'</div>'
+      +(nlText.length>180
+        ? '<svg id="ve-chev-'+_cardId+'" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:1px;transition:transform 0.25s;"><polyline points="6 9 12 15 18 9"/></svg>'
+        : '')
+      +'</div>'
+      : '')
+    +'</div>'
+    +'</div>'
+    +'<div class="conf-meter">'
+    +'<div class="conf-meter-header">'
+    +'<div class="conf-meter-title">Score Breakdown</div>'
+    +'<span class="conf-level-badge '+confClass+'">'+confidenceScore+' Confidence</span>'
+    +'</div>'
+    +'<div class="conf-scores-row">'
+    +'<div class="conf-score-block">'
+    +'<div class="conf-score-label" style="color:var(--emerald)">Human Signals</div>'
+    +'<div class="conf-score-value" style="color:var(--emerald)">'+humanPct+'%</div>'
+    +'<div class="conf-score-bar"><div class="conf-score-fill conf-fill-human" data-w="'+humanPct+'"></div></div>'
+    +'</div>'
+    +'<div class="conf-vs">VS</div>'
+    +'<div class="conf-score-block" style="text-align:right;">'
+    +'<div class="conf-score-label" style="color:var(--crimson)">AI Signals</div>'
+    +'<div class="conf-score-value" style="color:var(--crimson)">'+pct+'%</div>'
+    +'<div class="conf-score-bar"><div class="conf-score-fill conf-fill-ai" data-w="'+pct+'"></div></div>'
+    +'</div>'
+    +'</div>'
+    +'</div>'
+    +'<div id="ap-PLACEHOLDER" class="ap-wrap" style="margin:0;border-radius:var(--radius-md);border:1px solid var(--brd);background:#f8fbf9;overflow:hidden;">'
+    +'<div class="ap-inner">'
+    +'<div class="ap-header">'
+    +'<div class="ap-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--g)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg></div>'
+    +'<span class="ap-label">Listen</span><span class="ap-fname">'+esc(displayFilename)+'</span>'
+    +'</div>'
+    +'<div class="ap-viz-wrap" title="Click to seek"><canvas class="ap-viz-canvas"></canvas><div class="ap-progress-line" style="left:0%"></div></div>'
+    +'<div class="ap-controls">'
+    +'<button class="ap-btn ap-play-btn" title="Play/Pause"><svg width="13" height="13" viewBox="0 0 24 24" fill="white" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg></button>'
+    +'<span class="ap-time">0:00 / 0:00</span>'
+    +'<div class="ap-vol-wrap"><svg class="ap-vol-ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg><input class="ap-vol" type="range" min="0" max="1" step="0.02" value="1"></div>'
+    +'</div>'
+    +'<div class="ap-timeline" title="Click to jump"><div class="ap-tl-played"></div><div class="ap-tl-cursor" style="left:0%"></div></div>'
+    +'<div class="ap-tl-legend">'
+    +'<div class="ap-tl-legend-item"><div class="ap-tl-legend-dot" style="background:#ef4444"></div>AI section</div>'
+    +'<div class="ap-tl-legend-item"><div class="ap-tl-legend-dot" style="background:#10b981"></div>Human section</div>'
+    +'<div class="ap-tl-legend-item"><div class="ap-tl-legend-dot" style="background:#f59e0b"></div>Unclear</div>'
+    +'</div>'
+    +'</div>'
+    +'</div>'
+    +'<div class="how-card" id="how-'+_cardId+'">'
+    +'<div class="how-header" data-toggle="how-card">'
+    +'<div class="how-icon">🔬</div>'
+    +'<div class="how-title">How We Analyze Songs</div>'
+    +'<svg class="how-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>'
+    +'</div>'
+    +'<div class="how-body">'
+    +'<div style="font-size:11.5px;color:var(--mut);margin-bottom:10px;line-height:1.6;">We split every track into sections and run 2 independent checks on each one — a neural network and acoustic feature analysis:</div>'
+    +'<div class="how-grid">'
+    +'<div class="how-item"><div class="how-item-dot"></div>Vocal naturalness &amp; timing drift</div>'
+    +'<div class="how-item"><div class="how-item-dot"></div>Timing irregularities &amp; rhythm grid</div>'
+    +'<div class="how-item"><div class="how-item-dot"></div>Dynamic range &amp; loudness variation</div>'
+    +'<div class="how-item"><div class="how-item-dot"></div>Mixing texture &amp; production realism</div>'
+    +'<div class="how-item"><div class="how-item-dot"></div>Repetition patterns across sections</div>'
+    +'<div class="how-item"><div class="how-item-dot"></div>Section-to-section consistency</div>'
+    +'</div>'
+    +'</div>'
+    +'</div>'
+    +'<div class="vc-body" style="display:flex;flex-direction:column;gap:8px;padding:0 0 4px;">'
+    +(r.genre?genreHtml(r.genre):'')
+    +(r.score_breakdown?premiumBlendBar(r.score_breakdown):'')
+    +'<div style="padding:8px 0 0;">'
+    +'<div class="vc-foot"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> All formats standardized to 16kHz WAV before analysis.</div>'
+    +'</div>'
+    +'</div>';
   const apEl=card.querySelector('#ap-PLACEHOLDER');
-  if(apEl) apEl.id='ap-'+_cardId;
+  if(apEl)apEl.id='ap-'+_cardId;
+  // Add how-card toggle listener (avoids quote-in-onclick issues)
+  const howHeader=card.querySelector('[data-toggle="how-card"]');
+  if(howHeader){
+    howHeader.addEventListener('click',function(){
+      const hc=this.closest('.how-card');if(hc)toggleHow(hc.id);
+    });
+  }
   return card;
 }
 
-function animateCard(card,r){
-  const pct=Math.round((r.ai_probability??0)*10)/10;
-  const verdict=r.verdict||'Not Sure';
-  const railPct=displayPct(pct,verdict);
-  const arc=card.querySelector('.garc');
-  if(arc){
-    const circ=parseFloat(arc.dataset.circ);
-    const drawn=(railPct/100)*circ;
-    arc.style.transition='stroke-dashoffset 1.3s cubic-bezier(0.22,1,0.36,1)';
-    arc.style.strokeDashoffset=circ-drawn;
+function toggleHow(id){const el=document.getElementById(id);if(el)el.classList.toggle('open');}
+
+function toggleVE(cardId){
+  const wrap=document.getElementById('ve-'+cardId);
+  const textEl=document.getElementById('ve-text-'+cardId);
+  const chev=document.getElementById('ve-chev-'+cardId);
+  if(!wrap||!textEl)return;
+  const card=wrap.closest('.vc');
+  const full=card?card._fullExpl:'';
+  if(!full||full.length<=180)return;
+  const expanded=wrap.dataset.expanded==='1';
+  if(expanded){
+    textEl.textContent=full.slice(0,177)+'…';
+    if(chev)chev.style.transform='rotate(0deg)';
+    wrap.dataset.expanded='0';
+  } else {
+    textEl.textContent=full;
+    if(chev)chev.style.transform='rotate(180deg)';
+    wrap.dataset.expanded='1';
   }
+}
+
+function premiumBlendBar(sb){
+  if(!sb)return'';
+  const np=sb.neural_weight_pct||85,ap=sb.acoustic_weight_pct||15;
+  const nc=sb.neural_contribution||0,ac=sb.acoustic_contribution||0;
+  return'<div class="score-comp-card">'
+    +'<div class="score-comp-title">Score Composition <span class="score-comp-tag">How the final score was calculated</span></div>'
+    +'<div class="score-comp-bar">'
+    +'<div class="score-comp-seg-n" style="flex:'+np+'"></div>'
+    +'<div class="score-comp-seg-a" style="flex:'+ap+'"></div>'
+    +'</div>'
+    +'<div class="score-comp-meta">'
+    +'<div class="score-comp-col"><div class="score-comp-key"><span class="score-comp-dot" style="background:var(--emerald)"></span>Neural Network</div>'
+    +'<div class="score-comp-desc">Deep pattern recognition — '+np+'% of final score</div>'
+    +'<div class="score-comp-pts" style="color:var(--emerald)">+'+nc.toFixed(1)+' pts</div></div>'
+    +'<div class="score-comp-col"><div class="score-comp-key"><span class="score-comp-dot" style="background:#94a3b8"></span>Acoustic Features</div>'
+    +'<div class="score-comp-desc">Rhythm, pitch &amp; texture — '+ap+'% of final score</div>'
+    +'<div class="score-comp-pts" style="color:var(--mut)">+'+ac.toFixed(1)+' pts</div></div>'
+    +'</div>'
+    +'</div>'
+    +'<div style="margin-top:4px;padding:14px 16px;background:#fff;border-radius:14px;border:1.5px solid #e2e8f0;display:flex;align-items:flex-start;gap:10px;box-shadow:0 1px 3px rgba(15,23,42,0.04);">'
+    +'<svg style="flex-shrink:0;margin-top:2px;" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>'
+    +'<p style="font-family:\'DM Sans\',sans-serif;font-size:11px;color:#64748b;line-height:1.7;margin:0;"><strong style="color:#334155;font-weight:600;">Disclaimer:</strong> This tool provides an automated probabilistic estimate and is intended for informational purposes only. Results are not definitive and may not accurately reflect the true origin of a track. Factors such as audio quality, genre, production style, and encoding can affect accuracy. Do not rely solely on this result for legal, commercial, or copyright-related decisions.</p>'
+    +'</div>';
+}
+
+
+function animateCard(card,r){
+  card.querySelectorAll('.verdict-gauge-fill').forEach(el=>{
+    const w=parseFloat(el.getAttribute('data-w')||0);
+    el.style.transition='width 1.3s cubic-bezier(0.22,1,0.36,1)';
+    el.style.width=w+'%';
+  });
+  card.querySelectorAll('.conf-score-fill').forEach(el=>{
+    const w=parseFloat(el.getAttribute('data-w')||0);
+    el.style.transition='width 1.3s cubic-bezier(0.22,1,0.36,1) 0.2s';
+    el.style.width=w+'%';
+  });
+  document.querySelectorAll('.sec-bar-fill').forEach(el=>{
+    const w=parseFloat(el.getAttribute('data-w')||0);
+    el.style.transition='width 1s cubic-bezier(0.22,1,0.36,1)';
+    el.style.width=w+'%';
+  });
   card.querySelectorAll('.genre-row-bar').forEach(el=>{el.style.width=(el.dataset.w||'0')+'%';});
   card.querySelectorAll('.instr-bar').forEach(el=>{el.style.width=(el.dataset.iw||'0')+'%';});
 }
@@ -1733,7 +2378,7 @@ function renderGradCAM(container, xai_deep) {
     const barW = Math.max(4, pct);
     return `<div class="gradcam-region-row">
       <span class="gradcam-region-dot"></span>
-      <span class="gradcam-region-lbl">t=${r.time_sec}s · ${r.freq_hz} Hz</span>
+      <span class="gradcam-region-lbl">at ${r.time_sec}s · ${r.freq_hz} Hz</span>
       <div style="flex:1;margin:0 8px;height:4px;background:var(--brd);border-radius:99px;overflow:hidden;">
         <div style="width:${barW}%;height:100%;background:#dc2626;border-radius:99px;"></div>
       </div>
@@ -1766,39 +2411,38 @@ function renderGradCAM(container, xai_deep) {
   const signalSection = (aiSignalsHtml || humanSignalsHtml) ? `
     <div style="margin-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:10px;">
       ${aiSignalsHtml ? `<div>
-        <div style="font-family:var(--mono);font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#dc2626;margin-bottom:6px;">AI indicators</div>
+        <div style="font-family:var(--mono);font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#dc2626;margin-bottom:6px;">Signs of AI</div>
         <ul style="list-style:none;font-family:'DM Sans',sans-serif;font-size:11px;color:var(--txt);line-height:1.65;">${aiSignalsHtml}</ul>
       </div>` : ''}
       ${humanSignalsHtml ? `<div>
-        <div style="font-family:var(--mono);font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#16a34a;margin-bottom:6px;">Human indicators</div>
+        <div style="font-family:var(--mono);font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#16a34a;margin-bottom:6px;">Signs of human music</div>
         <ul style="list-style:none;font-family:'DM Sans',sans-serif;font-size:11px;color:var(--txt);line-height:1.65;">${humanSignalsHtml}</ul>
       </div>` : ''}
     </div>` : '';
 
-  // Stats row
   const statsRow = `
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
       <div style="background:var(--page);border:1px solid var(--brd);border-radius:10px;padding:10px 14px;flex:1;min-width:90px;">
-        <div style="font-family:var(--mono);font-size:8px;color:var(--faint);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px;">Peak activation</div>
+        <div style="font-family:var(--mono);font-size:8px;color:var(--faint);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px;">Strongest signal</div>
         <div style="font-family:'Plus Jakarta Sans',sans-serif;font-size:17px;font-weight:800;color:var(--txt);letter-spacing:-0.03em;line-height:1;">${Math.round((gc.peak_importance||0)*100)}%</div>
-        <div style="font-family:'DM Sans',sans-serif;font-size:10px;color:var(--mut);margin-top:3px;">at ${gc.peak_time_sec||0}s</div>
+        <div style="font-family:'DM Sans',sans-serif;font-size:10px;color:var(--mut);margin-top:3px;">at ${gc.peak_time_sec||0}s into track</div>
       </div>
       <div style="background:var(--page);border:1px solid var(--brd);border-radius:10px;padding:10px 14px;flex:1;min-width:90px;">
-        <div style="font-family:var(--mono);font-size:8px;color:var(--faint);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px;">Peak frequency</div>
+        <div style="font-family:var(--mono);font-size:8px;color:var(--faint);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px;">Pitch range</div>
         <div style="font-family:'Plus Jakarta Sans',sans-serif;font-size:17px;font-weight:800;color:var(--txt);letter-spacing:-0.03em;line-height:1;">${Math.round(gc.peak_freq_hz||0)} Hz</div>
         <div style="font-family:'DM Sans',sans-serif;font-size:10px;color:var(--mut);margin-top:3px;">${gc.freq_zone||'—'}</div>
       </div>
       <div style="background:var(--page);border:1px solid var(--brd);border-radius:10px;padding:10px 14px;flex:1;min-width:90px;">
-        <div style="font-family:var(--mono);font-size:8px;color:var(--faint);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px;">Time spread</div>
+        <div style="font-family:var(--mono);font-size:8px;color:var(--faint);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px;">Attention span</div>
         <div style="font-family:'Plus Jakarta Sans',sans-serif;font-size:17px;font-weight:800;color:var(--txt);letter-spacing:-0.03em;line-height:1;">${(gc.time_spread_sec||0).toFixed(2)}s</div>
-        <div style="font-family:'DM Sans',sans-serif;font-size:10px;color:var(--mut);margin-top:3px;">${(gc.freq_spread_hz||0).toFixed(0)} Hz spread</div>
+        <div style="font-family:'DM Sans',sans-serif;font-size:10px;color:var(--mut);margin-top:3px;">${(gc.freq_spread_hz||0).toFixed(0)} Hz pitch spread</div>
       </div>
     </div>`;
 
   // Freq zone explanation
   const freqZoneBox = gc.freq_zone_explanation ? `
     <div style="margin-top:12px;background:#f6f9f7;border:1px solid var(--brd);border-radius:10px;padding:10px 14px;">
-      <div style="font-family:var(--mono);font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:var(--faint);margin-bottom:5px;">Frequency zone</div>
+      <div style="font-family:var(--mono);font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:var(--faint);margin-bottom:5px;">Where in the pitch range</div>
       <div style="font-family:'DM Sans',sans-serif;font-size:11px;color:var(--txt);line-height:1.65;">${gc.freq_zone_explanation}</div>
     </div>` : '';
 
@@ -1814,38 +2458,37 @@ function renderGradCAM(container, xai_deep) {
 
   wrap.innerHTML = `
     <div class="gradcam-header">
-      <span class="gradcam-pill">Grad-CAM</span>
-      <span class="gradcam-title">CNN Activation Heatmap</span>
+      <span class="gradcam-pill">Grad-CAM Heatmap</span>
+      <span class="gradcam-title">Where the AI focused</span>
     </div>
     <div class="gradcam-subtitle">
-      Shows which time–frequency regions drove the AI/Human decision.
-      <strong>Red = high influence · Blue = low influence.</strong>
-      The heatmap covers the analysed segment (~${totalSec}s); frequency increases bottom→top.
+      This heatmap shows which parts of the sound the detector paid most attention to.
+      <strong>Red = high attention · Blue = low attention.</strong>
+      Left to right = time through the track; bottom to top = low to high pitch.
     </div>
     <div class="gradcam-canvas-wrap" id="gc-canvaswrap"></div>
     <div class="gradcam-axis-t">
       <span>0s</span><span>${(+totalSec/4).toFixed(1)}s</span><span>${(+totalSec/2).toFixed(1)}s</span><span>${(+totalSec*3/4).toFixed(1)}s</span><span>${totalSec}s</span>
     </div>
     <div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:8px;color:var(--faint);margin-top:2px;letter-spacing:0.02em;">
-      <span>Low freq →</span><span>→ High freq</span>
+      <span>Low pitch →</span><span>→ High pitch</span>
     </div>
     <div class="gradcam-legend">
-      <span class="gradcam-legend-lo">Low influence</span>
+      <span class="gradcam-legend-lo">Low attention</span>
       <div class="gradcam-legend-bar"></div>
-      <span class="gradcam-legend-hi">High influence</span>
+      <span class="gradcam-legend-hi">High attention</span>
     </div>
     ${statsRow}
     ${summaryBox}
     ${signalSection}
     ${freqZoneBox}
     ${regionRows ? `<div class="gradcam-regions" style="margin-top:12px;">
-      <div style="font-family:var(--mono);font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:var(--faint);margin-bottom:6px;">Top activated regions</div>
+      <div style="font-family:var(--mono);font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:var(--faint);margin-bottom:6px;">Most focused moments</div>
       ${regionRows}
     </div>` : ''}
     <div class="gradcam-note" style="margin-top:12px;">
-      <strong>How to read this:</strong> Grad-CAM computes the gradient of the model output with respect to the last CNN feature map, then weights each channel by its gradient magnitude.
-      A <em>concentrated red cluster</em> in an unusual frequency band is a strong AI indicator — it means the model found a specific spectral artifact.
-      A <em>diffuse, evenly spread heatmap</em> suggests the model processed the audio more holistically, consistent with human music.
+      <strong>How to read this:</strong> A tight red cluster in a specific area means the AI found a very specific sound pattern it associates with AI-generated music.
+      A spread-out, diffuse heatmap means the AI didn't find a single smoking-gun signal — more consistent with how real, human-made music sounds.
       The ${gc.concentration_label||''}.
     </div>`;
 
@@ -2525,7 +3168,7 @@ function startPCMScanner(scanCanvas){
     windowIdx++;
     const pct = Math.round((windowIdx / totalWindows) * 100);
     if(prescanFill)  prescanFill.style.width  = pct + '%';
-    if(prescanLabel) prescanLabel.textContent  = `Scanning song… ${windowIdx} / ${totalWindows} windows`;
+    if(prescanLabel) prescanLabel.textContent  = `Pre-scanning… ${pct}% done`;
 
     paintFullTimeline(scanCanvas, totalSec, null);
     setTimeout(processNextWindow, 0);  // yield to keep audio smooth
@@ -2711,7 +3354,7 @@ function initAudioPlayer(card, r){
     const inner=apWrap.querySelector('.ap-inner');
     const note=document.createElement('div');
     note.className='ap-err';
-    note.textContent='Audio preview not available (enable SAVE_CONVERTED_WAV in app.py).';
+    note.textContent='Audio preview is not available for this track.';
     inner.appendChild(note);
     [playBtn,volSlider].forEach(el=>{if(el)el.disabled=true;});
     return;
@@ -2752,11 +3395,27 @@ function initAudioPlayer(card, r){
 
   function ensureAudioCtx(){
     if(audioCtx) return;
-    audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+    audioCtx=new (window.AudioContext||window.webkitAudioContext)({latencyHint:'playback',sampleRate:44100});
     analyser=audioCtx.createAnalyser();
-    analyser.fftSize=256;
+    analyser.fftSize=2048;
+    analyser.smoothingTimeConstant=0.75;
+
+    // DynamicsCompressor — prevents clipping and evens out volume for cleaner playback
+    const compressor=audioCtx.createDynamicsCompressor();
+    compressor.threshold.setValueAtTime(-24,audioCtx.currentTime);
+    compressor.knee.setValueAtTime(30,audioCtx.currentTime);
+    compressor.ratio.setValueAtTime(4,audioCtx.currentTime);
+    compressor.attack.setValueAtTime(0.003,audioCtx.currentTime);
+    compressor.release.setValueAtTime(0.25,audioCtx.currentTime);
+
+    // GainNode — slight boost to restore loudness after compression
+    const gain=audioCtx.createGain();
+    gain.gain.setValueAtTime(1.2,audioCtx.currentTime);
+
     source=audioCtx.createMediaElementSource(audio);
-    source.connect(analyser);
+    source.connect(compressor);
+    compressor.connect(gain);
+    gain.connect(analyser);
     analyser.connect(audioCtx.destination);
   }
 
@@ -2916,6 +3575,197 @@ function verdictColorFromProb(prob){
   if(prob<0.40)return'#16a34a';
   return'#f59e0b';
 }
+
+// ── REPORTS PAGE ───────────────────────────────────────────
+let _allReports = [];
+
+async function loadReports(){
+  const loading = document.getElementById('reports-loading');
+  const empty   = document.getElementById('reports-empty');
+  const list    = document.getElementById('reports-list');
+  const summary = document.getElementById('reports-summary');
+  loading.style.display='block';
+  empty.style.display='none';
+  list.innerHTML='';
+  summary.style.display='none';
+  try {
+    const res  = await fetch('/reports');
+    const data = await res.json();
+    _allReports = data.reports || [];
+    loading.style.display='none';
+    if(!_allReports.length){ empty.style.display='block'; return; }
+
+    // Summary counts
+    const human  = _allReports.filter(r=>(r.verdict||'').toLowerCase().includes('human')).length;
+    const ai     = _allReports.filter(r=>(r.verdict||'').toLowerCase().includes('ai-generated')).length;
+    const unsure = _allReports.length - human - ai;
+    document.getElementById('rpt-total').textContent  = _allReports.length;
+    document.getElementById('rpt-human').textContent  = human;
+    document.getElementById('rpt-ai').textContent     = ai;
+    document.getElementById('rpt-unsure').textContent = unsure;
+    summary.style.display='flex';
+
+    _allReports.forEach(r => list.appendChild(buildReportCard(r)));
+  } catch(e){
+    loading.style.display='none';
+    list.innerHTML=`<div style="color:var(--red);font-size:13px;padding:12px;">Failed to load reports: ${e.message}</div>`;
+  }
+}
+
+function buildReportCard(r){
+  const card = document.createElement('div');
+  const v = (r.verdict||'').toLowerCase();
+  const isAI    = v.includes('ai-generated');
+  const isHuman = v.includes('human');
+  const col        = isHuman ? '#16a34a' : isAI ? '#ef4444' : '#d97706';
+  const colLight   = isHuman ? '#f0fdf4'  : isAI ? '#fef2f2'  : '#fffbeb';
+  const colBorder  = isHuman ? '#bbf7d0'  : isAI ? '#fecaca'  : '#fde68a';
+  const colText    = isHuman ? '#15803d'  : isAI ? '#b91c1c'  : '#92400e';
+  const emoji      = isHuman ? '🎵' : isAI ? '🤖' : '🤔';
+  const verdictLabel = isHuman ? 'Likely Human' : isAI ? 'Likely AI-Generated' : 'Uncertain';
+  const humanPct   = r.human_probability ?? (r.ai_probability != null ? (100 - r.ai_probability).toFixed(1) : '—');
+  const aiPct      = r.ai_probability != null ? r.ai_probability.toFixed(1) : '—';
+  const displayPct = isHuman ? humanPct : aiPct;
+  const displayLbl = isHuman ? 'Human Score' : isAI ? 'AI Score' : 'Uncertainty';
+  const date = r.analyzed_at ? new Date(r.analyzed_at).toLocaleString() : '—';
+  const dur  = r.duration_sec ? (r.duration_sec>=60 ? `${Math.floor(r.duration_sec/60)}:${String(Math.round(r.duration_sec%60)).padStart(2,'0')}` : `${Math.round(r.duration_sec)}s`) : '—';
+
+  // Segment mini-bars
+  const segBars = (r.segments||[]).map(s=>{
+    const pct = Math.round(s.neural_prob||0);
+    const c   = pct<35?'#16a34a':pct<45?'#4ade80':pct<55?'#d97706':pct<70?'#f87171':'#ef4444';
+    return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">
+      <span style="font-family:'DM Sans',sans-serif;font-size:10px;color:#64748b;min-width:68px;text-transform:capitalize;font-weight:500;">${esc(s.name||'')}</span>
+      <div style="flex:1;height:5px;background:#f1f5f9;border-radius:99px;overflow:hidden;">
+        <div style="height:100%;width:${pct}%;background:${c};border-radius:99px;"></div>
+      </div>
+      <span style="font-family:'DM Sans',sans-serif;font-size:10px;font-weight:700;color:${c};min-width:40px;text-align:right;">${pct}% AI</span>
+    </div>`;
+  }).join('');
+
+  const nlHtml = r.nl_explanation
+    ? `<div style="font-family:'DM Sans',sans-serif;font-size:12px;color:#475569;line-height:1.7;padding:12px 14px;background:#f8fafc;border-radius:10px;border:1px solid #e2e8f0;margin-bottom:14px;">${esc(r.nl_explanation)}</div>`
+    : '';
+
+  const genreBlock = r.genre ? `
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;">
+      <div style="font-family:'DM Sans',sans-serif;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#94a3b8;margin-bottom:6px;">Genre</div>
+      <div style="font-family:'DM Sans',sans-serif;font-size:15px;font-weight:700;color:#0f172a;margin-bottom:2px;">${esc(r.genre)}</div>
+      ${r.genre_score ? `<div style="font-family:'DM Sans',sans-serif;font-size:11px;color:#64748b;">${Math.round(r.genre_score)}% match</div>` : ''}
+    </div>` : '';
+
+  const segBlock = (r.segments||[]).length ? `
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;">
+      <div style="font-family:'DM Sans',sans-serif;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#94a3b8;margin-bottom:8px;">Section Breakdown</div>
+      ${segBars}
+    </div>` : '';
+
+  const gridCols = (r.genre && (r.segments||[]).length) ? '1fr 1fr' : '1fr';
+
+  card.innerHTML = `
+    <div style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 1px 8px rgba(15,23,42,0.07);border:1px solid #e2e8f0;transition:box-shadow 0.2s,transform 0.15s;"
+         onmouseover="this.style.boxShadow='0 6px 24px rgba(15,23,42,0.12)';this.style.transform='translateY(-2px)'"
+         onmouseout="this.style.boxShadow='0 1px 8px rgba(15,23,42,0.07)';this.style.transform='translateY(0)'">
+
+      <!-- Accent stripe -->
+      <div style="height:3px;background:${col};"></div>
+
+      <div style="padding:16px 18px;">
+
+        <!-- Top row: icon + filename + score -->
+        <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:12px;">
+          <div style="width:42px;height:42px;border-radius:11px;background:${colLight};border:1px solid ${colBorder};display:flex;align-items:center;justify-content:center;font-size:19px;flex-shrink:0;">${emoji}</div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-family:'DM Sans',sans-serif;font-size:13.5px;font-weight:600;color:#0f172a;word-break:break-word;line-height:1.35;margin-bottom:4px;">${esc(r.filename||'Unknown')}</div>
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+              <span style="font-family:'DM Sans',sans-serif;font-size:11px;color:#64748b;">${date}</span>
+              ${r.format ? `<span style="font-family:'DM Sans',sans-serif;font-size:10px;font-weight:600;background:#f1f5f9;color:#64748b;border-radius:4px;padding:1px 7px;border:1px solid #e2e8f0;">${esc(r.format)}</span>` : ''}
+              ${dur !== '—' ? `<span style="font-family:'DM Sans',sans-serif;font-size:11px;color:#64748b;">⏱ ${dur}</span>` : ''}
+            </div>
+          </div>
+          <div style="text-align:right;flex-shrink:0;">
+            <div style="font-family:'DM Sans',sans-serif;font-size:24px;font-weight:700;color:${col};letter-spacing:-0.02em;line-height:1;">${displayPct}%</div>
+            <div style="font-family:'DM Sans',sans-serif;font-size:10px;font-weight:600;color:${colText};margin-top:2px;">${displayLbl}</div>
+          </div>
+        </div>
+
+        <!-- Verdict badge -->
+        <div style="display:inline-flex;align-items:center;gap:5px;background:${colLight};border:1px solid ${colBorder};border-radius:6px;padding:4px 11px;margin-bottom:13px;">
+          <span style="width:5px;height:5px;border-radius:50%;background:${col};flex-shrink:0;"></span>
+          <span style="font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;color:${colText};">${verdictLabel}</span>
+        </div>
+
+        <!-- Dual score bar: Human left (green) | AI right (red) -->
+        <div style="height:7px;background:#f1f5f9;border-radius:99px;overflow:hidden;display:flex;margin-bottom:5px;">
+          <div style="height:100%;width:${humanPct}%;background:linear-gradient(to right,#16a34a,#4ade80);border-radius:99px 0 0 99px;flex-shrink:0;"></div>
+          <div style="height:100%;width:${aiPct}%;background:linear-gradient(to left,#ef4444,#f87171);border-radius:0 99px 99px 0;flex-shrink:0;"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:14px;">
+          <span style="font-family:'DM Sans',sans-serif;font-size:10.5px;font-weight:600;color:#16a34a;">${humanPct}% Human</span>
+          <span style="font-family:'DM Sans',sans-serif;font-size:10.5px;font-weight:600;color:#ef4444;">${aiPct}% AI</span>
+        </div>
+
+        ${nlHtml}
+
+        ${(r.genre || (r.segments||[]).length) ? `<div style="display:grid;grid-template-columns:${gridCols};gap:10px;margin-bottom:14px;">${genreBlock}${segBlock}</div>` : ''}
+
+        <!-- Footer -->
+        <div style="display:flex;gap:8px;padding-top:12px;border-top:1px solid #f1f5f9;align-items:center;">
+          <button onclick="downloadReport('${r.report_id}')"
+            style="display:inline-flex;align-items:center;gap:5px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:7px 13px;font-family:'DM Sans',sans-serif;font-size:11.5px;font-weight:600;color:#475569;cursor:pointer;"
+            onmouseover="this.style.background='#f1f5f9';this.style.borderColor='#cbd5e1'"
+            onmouseout="this.style.background='#f8fafc';this.style.borderColor='#e2e8f0'">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Download JSON
+          </button>
+          <button onclick="deleteReport('${r.report_id}', this)"
+            style="display:inline-flex;align-items:center;gap:5px;background:none;border:1px solid #e2e8f0;border-radius:8px;padding:7px 13px;font-family:'DM Sans',sans-serif;font-size:11.5px;font-weight:600;color:#94a3b8;cursor:pointer;margin-left:auto;"
+            onmouseover="this.style.borderColor='#fca5a5';this.style.color='#ef4444'"
+            onmouseout="this.style.borderColor='#e2e8f0';this.style.color='#94a3b8'">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>`;
+  return card;
+}
+
+async function downloadReport(id){
+  const r = _allReports.find(x=>x.report_id===id);
+  if(!r) return;
+  const blob = new Blob([JSON.stringify(r, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `report-${r.filename||id}.json`;
+  a.click();
+}
+
+function downloadAllReports(){
+  const blob = new Blob([JSON.stringify(_allReports, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `all-reports-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+}
+
+async function deleteReport(id, btn){
+  if(!confirm('Delete this report?')) return;
+  try {
+    await fetch(`/reports/${id}`, {method:'DELETE'});
+    const card = btn.closest('div[style*="border-radius:18px"]')?.parentElement || btn.closest('div');
+    if(card) card.remove();
+    _allReports = _allReports.filter(r=>r.report_id!==id);
+    // Update counts
+    document.getElementById('rpt-total').textContent  = _allReports.length;
+    document.getElementById('rpt-human').textContent  = _allReports.filter(r=>(r.verdict||'').toLowerCase().includes('human')).length;
+    document.getElementById('rpt-ai').textContent     = _allReports.filter(r=>(r.verdict||'').toLowerCase().includes('ai-generated')).length;
+    document.getElementById('rpt-unsure').textContent = _allReports.filter(r=>{ const v=(r.verdict||'').toLowerCase(); return !v.includes('human')&&!v.includes('ai-generated'); }).length;
+    if(!_allReports.length){ document.getElementById('reports-empty').style.display='block'; document.getElementById('reports-summary').style.display='none'; }
+  } catch(e){ alert('Failed to delete: '+e.message); }
+}
+
+// ── END OF REPORTS PAGE JS ─────────────────────────────────
 </script>
 </body>
 </html>
